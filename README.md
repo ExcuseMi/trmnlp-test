@@ -114,7 +114,7 @@ Other helpers: `trmnl.plugin('other/dir')`, `trmnl.lint()` with `toPassLint({ al
 
 ## How it works
 
-See [docs/README.md](docs/README.md) for diagrams of the components, a render, sessions and the file structure.
+See [docs/README.md](docs/README.md) for diagrams and [docs/SPEC.md](docs/SPEC.md) for the full specification.
 
 ## Examples and self-tests
 
