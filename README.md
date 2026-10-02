@@ -53,7 +53,9 @@ const { test, expect, matrix, VIEWS, DEVICES, FRAMEWORK } = require('trmnlp-test
 
 test('menu', async ({ trmnl }) => {
   const screen = await trmnl.render({
-    device: 'og_plus', view: 'full',          // any model, orientation: 'portrait', palette, darkMode, theme, scale, textScale, fonts, framework
+    device: 'og_plus', view: 'full',          // any model, orientation: 'portrait', palette, theme, scale, textScale, fonts, framework
+    darkMode: true,                           // as the server does it: everything inverted except images ('framework': the v3 class only)
+    server: true,                             // TRMNL's quirks: { qr: 'server' | 'fixed', crlf: true }
     fields: { data_source: 'webhook' },       // custom field values (defaults + .trmnlp.yml + these)
     webhook: { merge_variables: {...} },      // or data: {...} to render given data as is
     mocks: { 'https://api.example.com/*': { temp: 21 } },
@@ -64,6 +66,7 @@ test('menu', async ({ trmnl }) => {
   await expect(screen.locator('[data-row]')).toHaveCount(7); // any Playwright locator assertion
   await expect(screen).toHaveNoOverflow();
   await expect(screen).toHaveNoOverlap('.title', 'img');
+  await expect(screen).toShowText('Espresso');              // visible: not cut off by an ellipsis, clamp or the edge ({ visible: false }: content only)
   await expect(screen).toHaveQr('BCD\n002...');
   await expect(screen).toMatchScreen();                     // PNG snapshot (--update-snapshots)
   await expect(screen).toFitDeviceImageLimit();
@@ -89,6 +92,8 @@ for (const s of matrix({ device: DEVICES.representative, view: VIEWS, darkMode: 
 }
 ```
 
+**Where the server differs from trmnlp.** trmnlp-test renders with trmnlp's code, so it shares trmnlp's differences from TRMNL's server. The ones seen on trmnl.com are built in: `server: { qr: 'server' }` (the `qr_code` filter ignores "responsive" and returns the viewBox plus its natural width/height and `style="max-width:100%;height:auto"`) and `{ crlf: true }` (the web editor's preview made the template's newlines CR LF, so a newline typed in the template no longer matches `\n` in data). `{ qr: 'fixed' }` (a size and no viewBox) has not been seen and is there for robustness. `server: true` applies the seen ones. `matrix({ server: SERVER.variants })` renders each on its own. Dark mode follows what the server shows (inverted, images kept) rather than the v3 class, which leaves inline SVG and hard-coded colours as they are; `darkMode: 'framework'` renders the class only.
+
 Other helpers: `trmnl.plugin('other/dir')`, `trmnl.lint()` with `toPassLint({ allow })`, `FRAMEWORK.majors()`, `FRAMEWORK.latestOf('2')`.
 
 ## How it works
@@ -97,5 +102,5 @@ See [docs/README.md](docs/README.md) for diagrams of the components, a render, s
 
 ## Examples and self-tests
 
-- `examples/payment-qr`: the payment QR plugin, current Liquid version and the earlier webhook + serverless version (53 tests).
+- `examples/payment-qr`: the earlier webhook + serverless version of the payment QR plugin (the current version tests itself with trmnlp-test in its own repository).
 - `test/self`: fixture plugins for every strategy and language (86 tests). Run with `bin/trmnlp-test run --root test/self`.

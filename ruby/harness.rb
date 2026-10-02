@@ -28,6 +28,27 @@ end
 Time.singleton_class.prepend(FrozenNow)
 
 module TrmnlpTest
+  # Where TRMNL renders differently from trmnlp, as observed on trmnl.com (2026-10-02).
+  # Applied with render({ server: { qr: 'server' | 'fixed', crlf: true } }).
+  module ServerQr
+    # the server's qr_code, with or without "responsive": the viewBox plus its natural size and a
+    # max-width style, <svg width="275" height="275" style="max-width:100%;height:auto" viewBox="0 0 275 275">
+    module Server
+      def qr_code(data, size = 11, level = '', _view = 'responsive')
+        svg = super(data, size, level, 'responsive')
+        box = svg[/viewBox="0 0 (\d+) (\d+)"/]
+        return svg unless box
+
+        svg.sub('<svg ', %(<svg width="#{::Regexp.last_match(1)}" height="#{::Regexp.last_match(2)}" style="max-width:100%;height:auto" ))
+      end
+    end
+
+    # not seen, for robustness: a fixed size and no viewBox at all
+    module Fixed
+      def qr_code(data, size = 11, level = '', _view = 'responsive') = super(data, size, level, 'fixed')
+    end
+  end
+
   CACHE = ENV.fetch('TRMNLP_TEST_CACHE', File.join(Dir.tmpdir, 'trmnlp-test'))
   LIBFAKETIME = Dir['/usr/lib/*/faketime/libfaketime.so.1'].first
   INTERPRETERS = { 'python' => 'python3', 'ruby' => 'ruby', 'node' => 'node', 'php' => 'php' }.freeze
@@ -76,12 +97,20 @@ module TrmnlpTest
       }
     end
 
-    # The same Liquid environment trmnlp renders with, custom filters included.
-    def liquid_environment
-      @liquid_environment ||= TRMNL::Liquid.new do |env|
+    # The same Liquid environment trmnlp renders with, custom filters included, plus the
+    # server's qr_code when asked for.
+    def liquid_environment(qr = nil)
+      @liquid_environments ||= {}
+      @liquid_environments[qr.to_s] ||= TRMNL::Liquid.new do |env|
         config.project.user_filters.each do |module_name, relative_path|
           require paths.root_dir.join(relative_path)
           env.register_filter(Object.const_get(module_name))
+        end
+        case qr.to_s
+        when 'server' then env.register_filter(ServerQr::Server)
+        when 'fixed' then env.register_filter(ServerQr::Fixed)
+        when '' then nil
+        else raise ArgumentError, "server.qr must be 'server' or 'fixed' (got #{qr.inspect})"
         end
       end
     end
@@ -149,7 +178,8 @@ module TrmnlpTest
       end
       data = deep_merge(data, req['after']) if req['after'].is_a?(Hash)
       out['data'] = data
-      out['views'] = (req['views'] || plugin.views).to_h { |v| [v, render_view(plugin, v, data, now, req['strictVariables'])] }
+      server = req['server'].is_a?(Hash) ? req['server'] : {}
+      out['views'] = (req['views'] || plugin.views).to_h { |v| [v, render_view(plugin, v, data, now, req['strictVariables'], server)] }
       out['requests'] = table.requests
       out
     end
@@ -350,14 +380,16 @@ module TrmnlpTest
     end
 
     # ------------------------------------------------------------------ liquid
-    def render_view(plugin, view, data, now, strict)
+    def render_view(plugin, view, data, now, strict, server = {})
       path = plugin.paths.template(view)
       return { 'markup' => '', 'error' => "Missing template: #{path}" } unless path.exist?
 
       shared = plugin.paths.shared_template
       source = (shared.exist? ? shared.read : '') + path.read
+      # the web editor's preview made the template's newlines CR LF
+      source = source.gsub(/\r?\n/, "\r\n") if server['crlf']
       Thread.current[:trmnlp_test_now] = now
-      template = Liquid::Template.parse(source, environment: plugin.liquid_environment)
+      template = Liquid::Template.parse(source, environment: plugin.liquid_environment(server['qr']))
       markup = template.render(data, strict_variables: strict ? true : false)
       errors = template.errors.map(&:to_s)
       { 'markup' => markup, 'error' => nil, 'warnings' => errors }

@@ -30,10 +30,14 @@ const matchers = {
     return result(hits.length === 0, `${screen.label}: ${a} overlaps ${b} ${hits.length} time(s):\n${list(hits.slice(0, 20))}`);
   },
 
-  async toShowText(screen, expected, { selector = '.view' } = {}) {
-    const text = await screen.text(selector);
-    const pass = expected instanceof RegExp ? expected.test(text) : text.includes(expected);
-    return result(pass, `${screen.label}: expected ${selector} ${this.isNot ? 'not ' : ''}to show ${JSON.stringify(String(expected))}\nit shows:\n${text.slice(0, 1500)}`);
+  // the text is on the screen: present and, unless { visible: false }, not cut off by an
+  // ellipsis, a line clamp, overflow or the edge of the view
+  async toShowText(screen, expected, { selector = '.view', visible = true } = {}) {
+    const r = await screen.findText(expected, { selector });
+    const pass = r.found && (!visible || r.visible);
+    const what = JSON.stringify(String(expected));
+    let why = r.error || (!r.found ? `${selector} does not contain ${what}` : !r.visible ? `${what} is in ${selector} but cut off: "${r.hidden}" is not visible` : `${selector} shows ${what}`);
+    return result(pass, `${screen.label}: ${this.isNot ? 'expected not to show' : 'expected to show'} ${what}\n${why}\ntext: ${r.text.slice(0, 1500)}`);
   },
 
   // the QR code in the device picture decodes to `expected` (null: no QR at all)

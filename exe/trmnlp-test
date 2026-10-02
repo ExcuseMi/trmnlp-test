@@ -44,7 +44,8 @@ FileUtils.mkdir_p(cache)
 
 # a missing image is pulled; a :latest image is refreshed at most once a day
 present = system('docker', 'image', 'inspect', image, out: File::NULL, err: File::NULL)
-stamp = File.join(cache, '.pulled-' + image.gsub(/[^A-Za-z0-9.]+/, '_'))
+# the stamp names the launcher version too: a new launcher pulls at once, it may need a newer image
+stamp = File.join(cache, ".pulled-#{TrmnlpTest::VERSION}-" + image.gsub(/[^A-Za-z0-9.]+/, '_'))
 stale = image.end_with?(':latest') && (!File.exist?(stamp) || Time.now - File.mtime(stamp) > 86_400)
 if !present || (stale && !ENV['TRMNLP_TEST_NO_PULL'])
   warn "trmnlp-test: pulling #{image}" unless present

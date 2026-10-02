@@ -78,6 +78,55 @@ class Screen {
     }));
   }
 
+  // Where `expected` is in the text of `selector`, and whether each character of it is visible:
+  // inside every clipping ancestor (overflow, ellipsis, line clamp) and inside the view.
+  // => { found, visible, hidden: 'the part that is cut off', text }
+  async findText(expected, { selector = '.view' } = {}) {
+    const source = expected instanceof RegExp ? { re: expected.source, flags: expected.flags.replace('g', '') } : { str: String(expected) };
+    return this.page.evaluate(({ selector, source }) => {
+      const root = document.querySelector(selector);
+      if (!root) return { found: false, text: '', error: `no element matches ${selector}` };
+      // the text with runs of whitespace collapsed, and for each character the node and offset it came from
+      const chars = [];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const cs = n.parentElement && getComputedStyle(n.parentElement);
+        if (cs && (cs.display === 'none' || ['script', 'style', 'template'].includes(n.parentElement.tagName.toLowerCase()))) continue;
+        for (let i = 0; i < n.data.length; i++) {
+          const ch = /\s/.test(n.data[i]) ? ' ' : n.data[i];
+          if (ch === ' ' && (chars.length === 0 || chars[chars.length - 1].ch === ' ')) continue;
+          chars.push({ ch, node: n, i });
+        }
+      }
+      const text = chars.map((c) => c.ch).join('');
+      let at = -1, len = 0;
+      if (source.re) { const m = new RegExp(source.re, source.flags).exec(text); if (m) { at = m.index; len = m[0].length; } }
+      else { at = text.indexOf(source.str.replace(/\s+/g, ' ')); len = source.str.replace(/\s+/g, ' ').length; }
+      if (at < 0) return { found: false, text: text.trim() };
+      const clipsOf = (el) => {
+        const boxes = [];
+        for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+          const cs = getComputedStyle(e);
+          if (cs.visibility === 'hidden' || cs.opacity === '0') boxes.push(null);
+          if (/(hidden|clip|auto|scroll)/.test(cs.overflowX + cs.overflowY) || e === root) boxes.push(e.getBoundingClientRect());
+        }
+        return boxes;
+      };
+      let hidden = '';
+      for (let k = at; k < at + len; k++) {
+        const c = chars[k];
+        if (c.ch === ' ') continue;
+        const r = document.createRange();
+        r.setStart(c.node, c.i); r.setEnd(c.node, c.i + 1);
+        const rect = r.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        const shown = rect.width > 0 && clipsOf(c.node.parentElement).every((b) => b && cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom);
+        if (!shown) hidden += c.ch;
+      }
+      return { found: true, visible: hidden === '', hidden, text: text.trim() };
+    }, { selector, source });
+  }
+
   async text(selector = '.view') {
     return (await this.page.locator(selector).first().innerText()).trim();
   }

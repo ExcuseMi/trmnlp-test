@@ -1,0 +1,4 @@
+name: Quirks
+strategy: static
+static_data: '{"text": "a\nb\nc"}'
+framework_version: 3.4.0

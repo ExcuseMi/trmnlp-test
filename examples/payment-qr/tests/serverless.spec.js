@@ -6,7 +6,7 @@ const coffeeShop = require('../fixtures/coffee-shop.json'); // the webhook body 
 
 const EPC = northbean.qr.payload;
 const webhookMode = { fields: { data_source: 'webhook' } };
-const serverless = (trmnl) => trmnl.plugin('plugin-serverless');
+const serverless = (trmnl) => trmnl;
 
 test.describe('transform', () => {
   test('turns the webhook data into the qr object TRMNL stored', async ({ trmnl }) => {

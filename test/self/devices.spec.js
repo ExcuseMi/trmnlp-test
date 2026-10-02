@@ -20,7 +20,7 @@ for (const s of matrix({ darkMode: [false, true], theme: [undefined, 'black-and-
   test(`settings: ${s.label}`, async ({ trmnl }) => {
     const screen = await trmnl.render({ ...s, device: 'v2', webhook: data });
     expect(screen.classes).toContain('screen--v2');
-    if (s.darkMode) expect(screen.classes).toContain('screen--dark-mode');
+    if (s.darkMode) expect(screen.html).toContain('filter:invert(1)');
     if (s.theme) expect(screen.classes).toContain(`screen--theme-${s.theme}`);
     expect(screen).toRenderCleanly();
   });

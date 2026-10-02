@@ -32,9 +32,9 @@ opt transform file and transform !== false
   tx --> h : output JSON, stdout, stderr, ms, MB
   h -> h : output replaces data,\ntrmnl_state becomes next state
 end
-h -> h : Liquid render (shared + view),\nTime.now frozen
+h -> h : Liquid render (shared + view),\nTime.now frozen, server quirks\n(qr_code size, CRLF markup)
 h --> t : markup, data, transform result, requests
-t -> c : page: screen classes + model CSS variables,\nmashup slot, framework version, theme
+t -> c : page: screen classes + model CSS variables,\nmashup slot, framework version, theme,\ndark mode (inverted, images kept)
 c -> c : cached assets and fonts, fixed Date,\nwait for fonts + settle
 t --> spec : Screen
 spec -> c : locators, overflow, overlap

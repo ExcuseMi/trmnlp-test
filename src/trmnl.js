@@ -77,7 +77,7 @@ class Trmnl {
     const o = this.options(opts);
     const info = await this.info();
     const device = await this.device(o, info);
-    const darkMode = o.darkMode ?? info.settings.dark_mode === 'yes';
+    const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes', this.config.darkMode);
     const noBleed = o.noScreenPadding ?? info.settings.no_screen_padding === 'yes';
     const now = toSeconds(o.now);
     const trmnl = mergeDeep({
@@ -89,7 +89,7 @@ class Trmnl {
       plugin: this.dir, fields: o.fields, strategy: o.strategy, now, state: o.state, trmnl, device: trmnl.device,
       transform: o.transform, mocks: normaliseMocks(o.mocks), network: o.network || o.serverless.network || 'mock',
       timeoutMs: o.timeoutMs || o.serverless.timeoutMs || 5000, freezeTime: o.freezeTime, strictVariables: o.strictVariables,
-      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views,
+      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, server: serverQuirks(o.server),
     };
     if (o.data !== undefined) req.data = o.data;
     if (o.webhook !== undefined) req.webhook = applyAll(o.webhookStore || {}, o.webhook, { limit: o.webhookLimit || 'standard' });
@@ -110,10 +110,16 @@ class Trmnl {
     const view = opts.view || (this.config.defaults && this.config.defaults.view) || 'full';
     const { run, o, info, device, darkMode, noBleed, now } = await this.run(opts, [view]);
     const framework = FRAMEWORK.resolve(o.framework || info.framework.setting || 'latest');
-    const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode, noBleed,
+    // dark mode: before v3 the framework class inverts the screen itself. From v3 the class only
+    // remaps framework colours and leaves inline SVG and hard-coded colours alone, while TRMNL's
+    // server inverts everything except images, so 'invert' (the default) does that instead.
+    const v3 = FRAMEWORK.compare(framework, '3.0.0') >= 0;
+    const darkClass = !!darkMode && (!v3 || darkMode === 'framework');
+    const invert = !!darkMode && v3 && darkMode === 'invert';
+    const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode: darkClass, noBleed,
       theme: o.theme, scale: o.scale, textScale: o.textScale, fonts: o.fonts, extra: o.screenClasses });
     const rendered = run.views[view];
-    const html = buildPage({ markup: rendered.markup, view, framework, classes, model: device.model, slot: o.slot || 0, darkMode, theme: o.theme, head: o.head });
+    const html = buildPage({ markup: rendered.markup, view, framework, classes, model: device.model, slot: o.slot || 0, invert, theme: o.theme, head: o.head });
 
     const page = await this.browser.newPage({ viewport: { width: device.width, height: device.height }, deviceScaleFactor: 1 });
     const pageErrors = [], consoleErrors = [], browserRequests = [], missingAssets = [];
@@ -128,9 +134,9 @@ class Trmnl {
     const screenBox = await page.locator('.screen').first().boundingBox();
 
     const label = [device.model.name + (device.orientation === 'portrait' ? ' portrait' : ''), view,
-      device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && 'dark',
+      device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && (darkMode === 'framework' ? 'dark (framework)' : 'dark'),
       o.theme && `theme ${o.theme}`, o.scale && `scale ${o.scale}`, o.textScale && `text ${o.textScale}`,
-      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.note].filter(Boolean).join(' · ');
+      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.server && `server ${o.server === true ? 'all' : Object.entries(o.server).map(([k, v]) => (v === true ? k : `${k} ${v}`)).join(', ')}`, o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
       page, html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
       data: run.data, mergeVariables: run.mergeVariables, customFields: run.customFields, transform: new TransformResult(run),
@@ -224,6 +230,23 @@ class Trmnl {
   }
 }
 
+function darkModeOf(value, configured) {
+  if (!value || value === 'no') return false;
+  const mode = value === true || value === 'yes' ? configured || 'invert' : value;
+  if (!['invert', 'framework'].includes(mode)) throw new Error(`darkMode must be true, false, 'invert' or 'framework' (got ${JSON.stringify(value)})`);
+  return mode;
+}
+
+// render({ server: true }) applies every known difference of TRMNL's server; an object picks some
+const SERVER_ALL = { qr: 'server', crlf: true };
+function serverQuirks(server) {
+  if (!server) return {};
+  if (server === true) return SERVER_ALL;
+  const unknown = Object.keys(server).filter((k) => !(k in SERVER_ALL));
+  if (unknown.length) throw new Error(`unknown server quirk(s) ${unknown.join(', ')}: known are qr ('server' | 'fixed') and crlf`);
+  return server;
+}
+
 function pick(t) {
   return { ran: t.ran, language: t.language, durationMs: t.durationMs, maxRssMb: t.maxRssMb, error: t.error, requests: t.requests.length };
 }
@@ -235,4 +258,4 @@ function mergeDeep(a, b) {
   return out;
 }
 
-module.exports = { Trmnl, toSeconds, normaliseMocks };
+module.exports = { Trmnl, toSeconds, normaliseMocks, SERVER_ALL };

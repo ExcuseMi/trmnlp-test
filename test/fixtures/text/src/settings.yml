@@ -1,0 +1,4 @@
+name: Text
+strategy: static
+static_data: '{}'
+framework_version: 3.4.0

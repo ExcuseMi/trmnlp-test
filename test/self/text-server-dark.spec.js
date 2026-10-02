@@ -1,0 +1,76 @@
+const { test, expect, matrix, SERVER } = require('trmnlp-test');
+
+test.describe('toShowText sees what is cut off', () => {
+  test('visible text passes', async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/text').render();
+    await expect(screen).toShowText('Fully visible title');
+  });
+  for (const [what, text] of [['an ellipsis', 'Breakfast menu of the day'], ['a line clamp', 'thirteen fourteen'], ['the edge of the view', 'Off the edge']]) {
+    test(`text cut off by ${what} fails, but is in the content`, async ({ trmnl }) => {
+      const screen = await trmnl.plugin('../fixtures/text').render();
+      await expect(screen).not.toShowText(text);
+      await expect(screen).toShowText(text, { visible: false });
+      const r = await screen.findText(text);
+      expect(r.hidden.length).toBeGreaterThan(0);
+    });
+  }
+});
+
+test.describe('server quirks', () => {
+  test('trmnlp: a scalable svg, template newlines split', async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render();
+    await expect(screen.locator('[data-count]')).toHaveText('3');
+    expect(screen.markup).toMatch(/<svg[^>]*viewBox/);
+    expect(screen.markup).not.toMatch(/<svg[^>]*\swidth=/);
+  });
+  test('qr fixed (not seen, for robustness): width and height, no viewBox', async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { qr: 'fixed' } });
+    expect(screen.markup).toMatch(/<svg[^>]*\swidth=/);
+    expect(screen.markup).not.toMatch(/<svg[^>]*viewBox/);
+  });
+  test("qr server: viewBox, natural size and max-width, also without \"responsive\"", async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { qr: 'server' } });
+    expect(screen.markup).toMatch(/<svg width="(\d+)" height="\1" style="max-width:100%;height:auto" [^>]*viewBox="0 0 \1 \1"/);
+  });
+  test('crlf: a newline typed in the template no longer splits the data', async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { crlf: true } });
+    await expect(screen.locator('[data-count]')).toHaveText('1');
+  });
+  test('server: true applies all, unknown quirks are refused', async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: true });
+    await expect(screen.locator('[data-count]')).toHaveText('1');
+    await expect(trmnl.plugin('../fixtures/quirks').render({ server: { nope: 1 } })).rejects.toThrow(/unknown server quirk/);
+  });
+  for (const s of matrix({ server: SERVER.variants })) {
+    test(`variants render · ${s.label}`, async ({ trmnl }) => {
+      expect(await trmnl.plugin('../fixtures/quirks').render(s)).toRenderCleanly();
+    });
+  }
+});
+
+test.describe('dark mode', () => {
+  // an inline svg (white margin, black square), the same as an <img>, on a white screen
+  async function probe(trmnl, opts) {
+    const s = await trmnl.plugin('../fixtures/dark').render({ device: 'og_png', ...opts });
+    const png = await s.png({ dither: false });
+    const at = async (sel, d) => { const b = await s.box(sel); return png.pixel(b.x + d, b.y + d).gray; };
+    return { s, bg: png.pixel(5, 5).gray, svgMargin: await at('[data-svg]', 4), svgSquare: await at('[data-svg]', 60), imgMargin: await at('[data-img]', 4), imgSquare: await at('[data-img]', 60),
+      classMargin: await at('[data-img-class]', 4) };
+  }
+  test('true: like the server, everything inverted except images', async ({ trmnl }) => {
+    const p = await probe(trmnl, { darkMode: true });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 255, imgSquare: 0, classMargin: 255 });
+    expect(p.s.classes).not.toContain('screen--dark-mode');
+    expect(p.s.data.trmnl.plugin_settings.dark_mode).toBe('yes');
+  });
+  test("'framework': only the class, inline svg keeps its colours", async ({ trmnl }) => {
+    const p = await probe(trmnl, { darkMode: 'framework' });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 255, svgSquare: 0, imgMargin: 255, imgSquare: 0 });
+    expect(p.s.classes).toContain('screen--dark-mode');
+  });
+  // framework 2 does it with its own class, and spares only images with the framework's `image` class
+  test('framework 2: the class inverts, except <img class="image">', async ({ trmnl }) => {
+    const p = await probe(trmnl, { darkMode: true, framework: '2.0.1' });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255 });
+  });
+});

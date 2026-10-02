@@ -44,7 +44,7 @@ function deviceVariables(model, portrait) {
   return Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
 }
 
-function buildPage({ markup, view, framework, classes, model, slot = 0, darkMode, assetHost = 'https://trmnl.com', theme, head = '' }) {
+function buildPage({ markup, view, framework, classes, model, slot = 0, invert, assetHost = 'https://trmnl.com', theme, head = '' }) {
   oneOf('view', view, VIEWS);
   const v3 = FRAMEWORK.compare(framework, '3.0.0') >= 0;
   const vars = v3 ? deviceVariables(model, /\bscreen--portrait\b/.test(classes)) : '';
@@ -56,8 +56,8 @@ function buildPage({ markup, view, framework, classes, model, slot = 0, darkMode
     for (let i = 0; i < mashup.slots; i++) views.push(i === slot ? ours : `<div class="view view--${view}"></div>`);
     body = `<div class="${mashup.classes}">${views.join('')}</div>`;
   }
-  // before v3 the framework had no dark mode of its own: the service inverted the picture
-  const legacyDark = darkMode && !v3 ? '<style>.screen{filter:invert(1)} .screen img{filter:invert(1)}</style>' : '';
+  // TRMNL's dark mode: everything inverted except images
+  const legacyDark = invert ? '<style>.screen{filter:invert(1)} .screen img{filter:invert(1)}</style>' : '';
   const themeCss = theme ? `<link rel="stylesheet" href="${assetHost}/css/${framework}/themes/${theme}-theme.css" />` : '';
   return `<!DOCTYPE html>
 <html>

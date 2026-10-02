@@ -27,7 +27,7 @@
 ++ templates | init: config and first spec
 ++ test/fixtures | plugins for every strategy and language
 ++ test/self | the framework's own specs
-++ examples/payment-qr | a real plugin, both versions
+++ examples/payment-qr | a real plugin, webhook + serverless version
 ++ docs | these diagrams
 }
 }

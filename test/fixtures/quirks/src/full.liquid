@@ -1,0 +1,4 @@
+{%- assign parts = text | split: "
+" -%}
+<span data-count>{{ parts.size }}</span>
+<div data-qr>{{ "hello" | qr_code: 4, "m", "responsive" }}</div>
