@@ -1,0 +1,8 @@
+{% template weather %}
+<div class="layout layout--col gap--small" data-weather>
+  <span class="value value--xlarge" data-temp>{{ temp }}°{{ units }}</span>
+  <span class="label" data-city>{{ city }}</span>
+  <span class="label label--small" data-runs>run {{ runs }} · {{ fetched_at }}</span>
+</div>
+<div class="title_bar"><span class="title">{{ trmnl.plugin_settings.instance_name }}</span></div>
+{% endtemplate %}

@@ -1,0 +1,16 @@
+{
+  "name": "trmnlp-test",
+  "version": "0.1.0",
+  "description": "Test framework for TRMNL plugins: trmnlp projects, serverless transforms, webhooks, every device model and framework version",
+  "main": "src/index.js",
+  "bin": { "trmnlp-test": "src/cli.js" },
+  "license": "MIT",
+  "scripts": {
+    "test": "node src/cli.js run --root test/self"
+  },
+  "dependencies": {
+    "@playwright/test": "1.63.0",
+    "pngjs": "^7.0.0",
+    "yaml": "^2.8.0"
+  }
+}

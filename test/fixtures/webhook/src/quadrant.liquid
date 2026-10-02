@@ -1,0 +1,7 @@
+<div class="layout layout--col">
+  <span class="value" data-temp>{{ sensor.temperature }}</span>
+  <span class="label" data-label>{{ trmnl.plugin_settings.custom_fields_values.label }}</span>
+  <span class="label" data-readings>{{ sensor.readings | join: "," }}</span>
+  <span class="label" data-model>{{ trmnl.device.model }} {{ trmnl.device.width }}x{{ trmnl.device.height }} {{ trmnl.device.orientation }}</span>
+  <span class="label" data-now>{{ trmnl.system.timestamp_utc | date: "%Y-%m-%d %H:%M" }} {{ "now" | date: "%Y-%m-%d" }}</span>
+</div>

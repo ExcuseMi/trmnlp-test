@@ -1,0 +1,4 @@
+watch:
+  - src
+custom_fields:
+  city: Ghent

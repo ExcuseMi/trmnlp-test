@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Runs trmnlp-test in Docker against a plugin repository (default: the current directory).
+#   trmnlp-test [--repo DIR] [--mount DIR]... [run|init|models|versions|refresh|shell] [playwright args]
+# TRMNLP_TEST_BUILD=1 rebuilds the image; TRMNLP_VERSION=x.y.z builds against another trmnlp.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+IMAGE="${TRMNLP_TEST_IMAGE:-trmnlp-test:latest}"
+REPO="$PWD"
+MOUNTS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo) REPO="$(realpath "$2")"; shift 2 ;;
+    --mount) MOUNTS+=(-v "$(realpath "$2"):$(realpath "$2")"); shift 2 ;;
+    *) break ;;
+  esac
+done
+if [[ "${TRMNLP_TEST_BUILD:-}" == 1 ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  docker build --build-arg "TRMNLP_VERSION=${TRMNLP_VERSION:-0.13.1}" -t "$IMAGE" "$HERE" >&2
+fi
+CACHE="${TRMNLP_TEST_CACHE_DIR:-$HOME/.cache/trmnlp-test}"
+mkdir -p "$CACHE"
+TTY=(); [[ -t 1 ]] && TTY=(-t)
+ENTRY=(); if [[ "${1:-}" == shell ]]; then shift; ENTRY=(--entrypoint bash); fi
+exec docker run --rm -i "${TTY[@]}" --init --ipc=host -u "$(id -u):$(id -g)" \
+  -v "$REPO:$REPO" -w "$REPO" -v "$CACHE:/cache" "${MOUNTS[@]}" \
+  -e CI -e TRMNLP_TEST_DEBUG -e FORCE_COLOR "${ENTRY[@]}" "$IMAGE" "$@"

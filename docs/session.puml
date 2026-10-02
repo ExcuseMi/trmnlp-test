@@ -1,0 +1,26 @@
+@startuml session
+title trmnl.session(): a plugin instance over time
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+participant spec
+participant "session\n(webhookData, state)" as s
+participant "harness" as h
+
+== webhook plugin without transform ==
+spec -> s : webhook(body)
+s -> s : size check (2 kB, 5 kB TRMNL+) else 413\nreplace | deep_merge | stream
+spec -> s : render()
+s -> h : data = stored webhook data
+== webhook plugin with serverless transform ==
+spec -> s : webhook(body)
+s -> h : transform(data = merged)
+h --> s : output
+s -> s : store the output in place of the data
+spec -> s : render({ fields })
+s -> h : data = stored output, transform: false\n(settings changes do not re-run it)
+== polling / serverless plugin ==
+spec -> s : transform() or render()
+s -> h : state = last trmnl_state
+h --> s : new trmnl_state
+@enduml

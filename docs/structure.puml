@@ -1,0 +1,34 @@
+@startsalt structure
+{
+{T
++ trmnlp-test
+++ bin/trmnlp-test | host wrapper: builds the image, docker run
+++ Dockerfile | trmnlp 0.13.1 + Node 24 + Chromium + runtimes
+++ src
++++ cli.js | run, init, models, versions, refresh
++++ config.js | trmnlp-test.config.js defaults
++++ deps.js | transform dependencies per language
++++ index.js | test, expect, matrix, DEVICES, VIEWS, FRAMEWORK
++++ trmnl.js | the trmnl fixture: render, transform, session, lint
++++ screen.js | Screen and TransformResult
++++ page.js | page HTML and screen classes
++++ assets.js | request routing, asset cache, browser mocks
++++ png.js | palette reduction, pixels, QR, image size
++++ matchers.js | expect(screen).toXxx()
++++ models.js | device models and palettes
++++ framework.js | framework versions
++++ webhook.js | merge strategies and size limits
++++ harness.js | Ruby harness client
++++ gallery-reporter.js | report index.html
+++ ruby
++++ harness.rb | data assembly, transform, Liquid, lint
++++ mock_proxy.rb | CA, mock table, HTTP(S) proxy
+++ data | bundled models, palettes, framework versions
+++ templates | init: config and first spec
+++ test/fixtures | plugins for every strategy and language
+++ test/self | the framework's own specs
+++ examples/payment-qr | a real plugin, both versions
+++ docs | these diagrams
+}
+}
+@endsalt

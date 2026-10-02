@@ -1,0 +1,49 @@
+@startuml components
+title trmnlp-test: components
+skinparam shadowing false
+skinparam componentStyle rectangle
+left to right direction
+
+actor Developer as dev
+package "plugin repo (host)" {
+  [trmnlp-test.config.js] as cfg
+  [test/trmnl/*.spec.js] as specs
+  [plugin/src + .trmnlp.yml] as plugin
+  [test/trmnl-report/] as report
+}
+package "Docker image trmnlp-test\nFROM trmnl/trmnlp:v0.13.1" {
+  [bin/trmnlp-test\n-> src/cli.js] as cli
+  [Playwright runner] as pw
+  [src/index.js\nfixtures + matchers] as api
+  [ruby/harness.rb] as harness
+  [trmnlp 0.13.1 library] as trmnlp
+  [python / ruby / node / php\n+ libfaketime] as runtimes
+  [mock proxy (MITM)] as proxy
+  [Chromium] as chrome
+  [zbarimg, ImageMagick] as tools
+  [gallery reporter] as gallery
+}
+package "~/.cache/trmnlp-test" {
+  [deps/<lang>-<hash>] as deps
+  [assets + fonts] as assets
+  [models, palettes,\nframework versions] as meta
+}
+
+dev --> cli
+cfg --> cli
+cli --> deps : install
+cli --> meta : refresh daily
+cli --> pw
+pw --> specs
+specs --> api
+api --> harness : JSON lines
+harness --> plugin
+harness --> trmnlp
+harness --> runtimes : transform
+runtimes --> proxy : HTTP(S)
+api --> chrome : page
+chrome --> assets
+api --> tools : QR, size
+pw --> gallery
+gallery --> report
+@enduml

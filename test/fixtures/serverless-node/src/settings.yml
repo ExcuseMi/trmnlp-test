@@ -1,0 +1,15 @@
+name: Weather node
+strategy: polling
+refresh_interval: 15
+framework_version: 3.4.0
+serverless_language: node
+custom_fields:
+  - keyname: city
+    field_type: string
+    name: City
+    default: Brussels
+  - keyname: units
+    field_type: select
+    name: Units
+    options: [{Celsius: c}, {Fahrenheit: f}]
+    default: c

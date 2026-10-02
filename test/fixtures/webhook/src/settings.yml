@@ -1,0 +1,9 @@
+name: Sensor
+strategy: webhook
+refresh_interval: 15
+framework_version: 3.4.0
+custom_fields:
+  - keyname: label
+    field_type: string
+    name: Label
+    default: Living room

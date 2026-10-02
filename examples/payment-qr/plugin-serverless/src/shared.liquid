@@ -1,0 +1,298 @@
+{% template main %}
+{%- comment -%}
+  `qr` comes from src/transform.js (serverless, runs on TRMNL before every render): it picks the data
+  source, builds the QR payload, captions, price rows and title bar. This template only lays it out.
+{%- endcomment -%}
+{%- assign payload = qr.payload | default: "" -%}
+{%- assign caption = qr.caption | default: "" -%}
+{%- assign title = qr.title | default: "" -%}
+{%- assign body = qr.body | default: "" -%}
+{%- assign footer = qr.footer | default: "" -%}
+{%- assign icon = qr.icon | default: "none" -%}
+{%- assign image_url = qr.image_url | default: "" -%}
+{%- assign has_visual = false -%}
+{%- if qr.has_visual -%}{%- assign has_visual = true -%}{%- endif -%}
+{%- comment -%} accent classes are only switched on by the script at the bottom, on color screens {%- endcomment -%}
+{%- assign accent_text = "text--red" -%}
+{%- assign accent_pill = "bg--red text--white px--3 rounded--small" -%}
+{%- assign level = "m" -%}
+
+{%- comment -%}
+  ---------- layout, chosen from the content and the view ----------
+  beside:   QR with the text next to it; a full portrait screen stacks it (portrait: classes below)
+  stacked:  title, QR, text, footer in one column, for the tall half view
+  centered: title, QR, caption, footer in one column, when there is no text
+  Short views (half wide, quarter) put title and footer beside the QR when there are any.
+{%- endcomment -%}
+{%- assign has_body = false -%}
+{%- if body != blank -%}{%- assign has_body = true -%}{%- endif -%}
+{%- assign has_side = false -%}
+{%- if title != blank or footer != blank or has_visual -%}{%- assign has_side = true -%}{%- endif -%}
+{%- if has_body -%}
+  {%- assign mode = "beside" -%}
+  {%- if view == 3 -%}{%- assign mode = "stacked" -%}{%- endif -%}
+{%- else -%}
+  {%- assign mode = "centered" -%}
+  {%- if has_side -%}
+    {%- if view == 2 or view == 4 -%}{%- assign mode = "beside" -%}{%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- assign show_body = has_body -%}
+{%- if view == 4 -%}{%- assign show_body = false -%}{%- endif -%}
+{%- assign caption_under_qr = true -%}
+{%- if view == 4 and mode == "beside" -%}{%- assign caption_under_qr = false -%}{%- endif -%}
+
+{%- assign title_size = "title--large" -%}
+{%- assign caption_size = "" -%}
+{%- if view == 2 or view == 3 -%}{%- assign title_size = "" -%}{%- assign caption_size = "title--small" -%}{%- endif -%}
+{%- if view == 4 -%}{%- assign title_size = "title--small" -%}{%- assign caption_size = "title--small" -%}{%- endif -%}
+
+{%- comment -%} ---------- QR height, as a share of the layout height ---------- {%- endcomment -%}
+{%- assign qr_h = 100 -%}
+{%- if mode == "beside" -%}
+  {%- if caption != blank and caption_under_qr -%}{%- assign qr_h = qr_h | minus: 14 -%}{%- endif -%}
+  {%- if view == 2 -%}{%- assign qr_h = qr_h | plus: 2 -%}{%- endif -%}
+{%- else -%}
+  {%- if title != blank or has_visual -%}{%- assign qr_h = qr_h | minus: 13 -%}{%- endif -%}
+  {%- if caption != blank -%}{%- assign qr_h = qr_h | minus: 10 -%}{%- endif -%}
+  {%- if footer != blank -%}{%- assign qr_h = qr_h | minus: 8 -%}{%- endif -%}
+  {%- if show_body and mode == "stacked" -%}{%- assign qr_h = qr_h | minus: 26 -%}{%- endif -%}
+{%- endif -%}
+{%- comment -%} the framework only has h--[0cqh] to h--[100cqh] {%- endcomment -%}
+{%- if qr_h > 100 -%}{%- assign qr_h = 100 -%}{%- endif -%}
+{%- if qr_h < 30 -%}{%- assign qr_h = 30 -%}{%- endif -%}
+{%- assign qr_dims = "h--[" | append: qr_h | append: "cqh] w--[" | append: qr_h | append: "cqh]" -%}
+{%- if view == 1 and mode == "beside" -%}
+  {%- assign qr_hp = 100 -%}
+  {%- if caption != blank -%}{%- assign qr_hp = qr_hp | minus: 7 -%}{%- endif -%}
+  {%- if title != blank or has_visual -%}{%- assign qr_hp = qr_hp | minus: 8 -%}{%- endif -%}
+  {%- if show_body -%}{%- assign qr_hp = qr_hp | minus: 30 -%}{%- endif -%}
+  {%- if footer != blank -%}{%- assign qr_hp = qr_hp | minus: 6 -%}{%- endif -%}
+  {%- assign qr_dims = qr_dims | append: " portrait:h--[" | append: qr_hp | append: "cqh] portrait:w--[" | append: qr_hp | append: "cqh]" -%}
+{%- endif -%}
+
+{%- comment -%} ---------- icon set (Lucide, ISC licence) ---------- {%- endcomment -%}
+{%- capture icon_paths -%}
+{%- case icon -%}
+{%- when "heart" -%}<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+{%- when "coffee" -%}<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2"/><path d="M10 2v2"/><path d="M14 2v2"/>
+{%- when "beer" -%}<path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z"/><path d="M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/>
+{%- when "food" -%}<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
+{%- when "gift" -%}<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>
+{%- when "cart" -%}<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+{%- when "home" -%}<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+{%- when "users" -%}<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+{%- when "wallet" -%}<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+{%- when "euro" -%}<path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/>
+{%- when "dollar" -%}<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+{%- when "phone" -%}<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>
+{%- when "star" -%}<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>
+{%- endcase -%}
+{%- endcapture -%}
+
+{%- capture visual -%}
+{%- if image_url != blank -%}
+<img class="image image--contain image-dither w--full h--full" src="{{ image_url }}" alt="">
+{%- elsif icon_paths != blank -%}
+<svg class="w--full h--full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ icon_paths }}</svg>
+{%- endif -%}
+{%- endcapture -%}
+
+{%- comment -%} ---------- building blocks ---------- {%- endcomment -%}
+{%- capture qr_box -%}
+<div class="shrink-0 aspect--1/1 w--max-full {{ qr_dims }}" data-qr-box>
+  {%- if payload != blank -%}
+    {%- comment -%}
+      The code is drawn as an <img>: TRMNL's dark mode inverts the whole screen except images, and
+      an inverted (white on black) code is unreadable for many banking apps. The quiet zone, the white
+      margin scanners need, is drawn inside the image for the same reason.
+      TRMNL's server can return the svg at a fixed pixel size (width/height, no viewBox) where trmnlp
+      returns a scalable one, so normalize to a viewBox first.
+    {%- endcomment -%}
+    {%- capture qr_svg -%}{{ payload | qr_code: 11, level, "responsive" }}{%- endcapture -%}
+    {%- assign qr_svg = qr_svg | split: '<svg' | last | prepend: '<svg' -%}
+    {%- if qr_svg contains "viewBox" -%}
+      {%- assign qr_px = qr_svg | split: 'viewBox="0 0 ' | last | split: ' ' | first -%}
+    {%- else -%}
+      {%- assign qr_px = qr_svg | split: 'width="' | slice: 1, 1 | first | split: '"' | first -%}
+      {%- assign w_attr = 'width="' | append: qr_px | append: '"' -%}
+      {%- assign h_attr = 'height="' | append: qr_px | append: '"' -%}
+      {%- assign qr_svg = qr_svg | replace_first: w_attr, '' | replace_first: h_attr, '' -%}
+      {%- assign qr_svg = qr_svg | replace_first: '<svg ', '<svg viewBox="0 0 QRPX QRPX" ' | replace: "QRPX", qr_px -%}
+    {%- endif -%}
+    {%- capture qr_img -%}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" shape-rendering="crispEdges"><rect width="100" height="100" fill="#fff"/>{{ qr_svg | replace_first: '<svg ', '<svg x="8" y="8" width="84" height="84" ' }}</svg>{%- endcapture -%}
+    <img class="w--full h--full" src="data:image/svg+xml;base64,{{ qr_img | base64_encode }}" alt="Payment QR code" data-qr-img data-qr-modules="{{ qr_px | divided_by: 11 }}">
+  {%- else -%}
+    <div class="flex flex--row flex--center h--full w--full outline rounded p--4">
+      <span class="label text--center">{{ qr.missing | default: "The plugin data is not available" }}</span>
+    </div>
+  {%- endif -%}
+</div>
+{%- endcapture -%}
+
+{%- capture heading -%}
+{%- if title != blank or has_visual -%}
+<div class="flex flex--row flex--center-y gap--small{% if mode == "beside" %} flex--left{% endif %}">
+  {%- if has_visual -%}<div class="shrink-0 h--10 w--10" data-accent="{{ accent_text }}">{{ visual }}</div>{%- endif -%}
+  {%- if title != blank -%}<span class="title {{ title_size }}" data-clamp="2">{{ title }}</span>{%- endif -%}
+</div>
+{%- endif -%}
+{%- endcapture -%}
+
+{%- capture body_html -%}
+{%- if show_body -%}
+<div class="richtext richtext--left stretch w--full" data-qr-body>
+  {%- comment -%} starts large; the script at the bottom shrinks it to fit {%- endcomment -%}
+  <div class="content content--large content--left text--left w--full w--max-full">
+    {{ body | markdown_to_html }}
+  </div>
+</div>
+{%- endif -%}
+{%- endcapture -%}
+
+{%- capture footer_html -%}
+{%- comment -%} no data-clamp: on TRMNL's server the clamp cut "Thank you!" to "Thank y..." although it fit {%- endcomment -%}
+{%- if footer != blank -%}<span class="label{% if mode != "beside" %} text--center{% endif %}">{{ footer }}</span>{%- endif -%}
+{%- endcapture -%}
+
+{%- comment -%} ---------- layouts ---------- {%- endcomment -%}
+{%- if mode == "beside" -%}
+<div class="layout layout--row layout--stretch-y gap--large portrait:layout--col portrait:layout--stretch-x" data-qr-layout="beside">
+  <div class="flex flex--col flex--center-x gap--small shrink-0 w--[{{ qr_h }}cqh] portrait:w--full">
+    {{ qr_box }}
+    {%- if caption != blank and caption_under_qr -%}<span class="title {{ caption_size }} text--center" data-clamp="2" data-accent="{{ accent_pill }}">{{ caption }}</span>{%- endif -%}
+  </div>
+  {%- comment -%} dividers: between QR and text (not when stacked on portrait), under the title, above the footer {%- endcomment -%}
+  <div class="divider--v portrait:hidden" data-qr-divider></div>
+  <div class="flex flex--col flex--stretch-x {% if show_body %}flex--top{% else %}flex--center-y{% endif %} gap--small stretch">
+    {{ heading }}
+    {%- if caption != blank and caption_under_qr == false -%}<span class="title {{ caption_size }}" data-clamp="2" data-accent="{{ accent_pill }}">{{ caption }}</span>{%- endif -%}
+    {%- if show_body and heading != blank -%}<div class="divider" data-qr-divider></div>{%- endif -%}
+    {{ body_html }}
+    {%- if footer != blank and show_body -%}<div class="divider" data-qr-divider></div>{%- endif -%}
+    {{ footer_html }}
+  </div>
+</div>
+{%- else -%}
+<div class="layout layout--col layout--center gap--small" data-qr-layout="{{ mode }}">
+  {{ heading }}
+  {{ qr_box }}
+  {%- if caption != blank -%}<span class="title {{ caption_size }} text--center" data-clamp="2" data-accent="{{ accent_pill }}">{{ caption }}</span>{%- endif -%}
+  {%- if mode == "stacked" -%}
+    {%- if show_body -%}<div class="divider w--full" data-qr-divider></div>{%- endif -%}
+    {{ body_html }}
+  {%- endif -%}
+  {{ footer_html }}
+</div>
+{%- endif -%}
+
+{%- if qr.title_bar.show != false -%}
+<div class="title_bar">
+  {%- if qr.title_bar.icon_url != blank -%}
+  <img class="image" src="{{ qr.title_bar.icon_url }}" alt="">
+  {%- else -%}
+  <svg class="image" width="24" height="24" viewBox="0 0 64 64"><rect x="4" y="4" width="22" height="22" rx="4"/><rect x="10" y="10" width="10" height="10" rx="2" fill="#fff"/><rect x="38" y="4" width="22" height="22" rx="4"/><rect x="44" y="10" width="10" height="10" rx="2" fill="#fff"/><rect x="4" y="38" width="22" height="22" rx="4"/><rect x="10" y="44" width="10" height="10" rx="2" fill="#fff"/><circle cx="49" cy="49" r="13"/><path d="M49 42v14M53 45.5c-1-1.2-2.4-1.8-4-1.8-2.2 0-3.8 1.1-3.8 2.8 0 4 7.8 2 7.8 6 0 1.7-1.7 2.9-4 2.9-1.8 0-3.3-.7-4.3-2" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+  {%- endif -%}
+  <span class="title">{{ qr.title_bar.text | default: trmnl.plugin_settings.instance_name }}</span>
+</div>
+{%- endif -%}
+<script>
+(function () {
+  var view = document.currentScript.closest('.view') || document;
+  var screen = document.querySelector('.screen');
+  var color = !!screen && screen.className.indexOf('screen--color-') >= 0;
+  if (color) {
+    view.querySelectorAll('[data-accent]').forEach(function (el) {
+      if (el.dataset.accent) el.className += ' ' + el.dataset.accent;
+    });
+  }
+
+  // fit the markdown into its box: step the text size down, then drop trailing blocks,
+  // then clamp the last block to the lines that are left
+  var SIZES = ['content--xlarge', 'content--large', 'content--base', 'content--small'];
+  // list marks: the framework resets list styles, so draw a bullet (or the number) in front of each item
+  function markLists(content) {
+    content.querySelectorAll('li').forEach(function (li) {
+      var ordered = li.parentElement && li.parentElement.tagName === 'OL';
+      var mark = document.createElement('span');
+      mark.setAttribute('data-qr-mark', '');
+      if (ordered) {
+        mark.textContent = (Array.prototype.indexOf.call(li.parentElement.children, li) + 1) + '.';
+        mark.style.cssText = 'flex:none;min-width:1.4em';
+      } else {
+        mark.style.cssText = 'flex:none;width:.4em;height:.4em;border-radius:50%;background:currentColor;margin-top:calc((1lh - .4em) / 2)';
+      }
+      if (color) mark.className = 'text--red';
+      var text = document.createElement('span');
+      text.style.cssText = 'flex:1 1 0;min-width:0';
+      while (li.firstChild) text.appendChild(li.firstChild);
+      li.appendChild(mark);
+      li.appendChild(text);
+      li.style.cssText = 'display:flex;align-items:flex-start;gap:.5em;list-style:none';
+    });
+    content.querySelectorAll('ul, ol').forEach(function (list) { list.style.paddingLeft = '0'; });
+  }
+
+  function fit() {
+    view.querySelectorAll('[data-qr-body]').forEach(function (box) {
+      var content = box.firstElementChild;
+      box.style.overflow = 'hidden';
+      // start from the original text each run, so a later run can undo an early, too-tight one
+      if (box._orig == null) box._orig = [content.className, content.innerHTML];
+      content.className = box._orig[0];
+      content.innerHTML = box._orig[1];
+      // the content column left-aligns its children, which shrinks a price list to its text;
+      // stretch the blocks holding price rows so the prices line up on the right edge
+      content.querySelectorAll('[data-qr-row]').forEach(function (row) {
+        var block = row.closest('ul, ol, p');
+        if (block) block.style.alignSelf = 'stretch';
+        // a dotted leader from the item to its price, sitting on the text baseline
+        var leader = document.createElement('span');
+        leader.style.cssText = 'flex:1 1 0;min-width:1em;align-self:stretch;margin-bottom:.3em;border-bottom:2px dotted currentColor';
+        row.insertBefore(leader, row.lastElementChild);
+        row.style.alignItems = 'flex-end';
+      });
+      markLists(content);
+      // a markdown --- becomes the framework's divider
+      content.querySelectorAll('hr').forEach(function (hr) {
+        var d = document.createElement('div');
+        d.className = 'divider';
+        hr.replaceWith(d);
+      });
+      var over = function () { return content.scrollHeight > box.clientHeight + 1; };
+      var i = SIZES.findIndex(function (c) { return content.classList.contains(c); });
+      while (over() && i >= 0 && i < SIZES.length - 1) {
+        content.classList.remove(SIZES[i]);
+        content.classList.add(SIZES[++i]);
+      }
+      // drop what does not fit from the end: single list items first, so a long price list keeps
+      // the rows that fit instead of disappearing as a whole
+      while (over()) {
+        var tail = content.lastElementChild;
+        if (!tail) break;
+        if ((tail.tagName === 'UL' || tail.tagName === 'OL') && tail.children.length > 1) tail.removeChild(tail.lastElementChild);
+        else if (content.children.length > 1) content.removeChild(tail);
+        else break;
+      }
+      // a heading whose items were all cut is noise
+      while (content.children.length > 1 && /^H[1-6]$/.test(content.lastElementChild.tagName)) content.removeChild(content.lastElementChild);
+      var last = content.lastElementChild;
+      if (over() && last) {
+        // rects are zoomed on high-density screens, line-height is not
+        var zoom = box.getBoundingClientRect().height / box.clientHeight || 1;
+        var lh = (parseFloat(getComputedStyle(last).lineHeight) || 20) * zoom;
+        var room = box.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
+        var lines = Math.max(1, Math.floor(room / lh));
+        last.style.display = '-webkit-box';
+        last.style.webkitBoxOrient = 'vertical';
+        last.style.webkitLineClamp = String(lines);
+        last.style.overflow = 'hidden';
+      }
+    });
+  }
+  // the framework settles its own layout on load, so fit again after it
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit, fit); else fit();
+  window.addEventListener('load', function () { setTimeout(fit, 100); });
+})();
+</script>
+{% endtemplate %}

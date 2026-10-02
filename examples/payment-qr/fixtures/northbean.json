@@ -1,0 +1,76 @@
+{
+  "qr": {
+    "body": "## Coffee\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Espresso</span><span class=\"shrink-0\" data-qr-price>€2.40</span></span>\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Cappuccino</span><span class=\"shrink-0\" data-qr-price>€3.20</span></span>\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Flat white</span><span class=\"shrink-0\" data-qr-price>€3.60</span></span>\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Caffe latte</span><span class=\"shrink-0\" data-qr-price>€3.60</span></span>\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Chai latte</span><span class=\"shrink-0\" data-qr-price>€3.80</span></span>\n\n## Something sweet\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Butter croissant</span><span class=\"shrink-0\" data-qr-price>€2.50</span></span>\n- <span class=\"flex flex--row flex--between gap--small w--full\" data-qr-row><span>Cinnamon bun</span><span class=\"shrink-0\" data-qr-price>€3.20</span></span>\n\n*Oat milk +€0.40*",
+    "icon": "none",
+    "title": "Northbean Coffee",
+    "footer": "Thank you!",
+    "caption": "Scan, pay, enjoy",
+    "missing": "Send the payment details to the webhook",
+    "payload": "BCD\n002\n1\nSCT\n\nNorthbean Coffee\nBE71096123456769\n\n\n\nNorthbean Coffee",
+    "image_url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-payment-qr-code-plugin/main/assets/examples/northbean-logo.png",
+    "title_bar": {
+      "show": true,
+      "text": "Payment QR Code",
+      "icon_url": ""
+    },
+    "has_visual": true,
+    "webhook_mode": true
+  },
+  "trmnl": {
+    "user": {
+      "id": 6458,
+      "name": "Excuse Me",
+      "first_name": "Excuse",
+      "last_name": "Me",
+      "locale": "nl",
+      "time_zone": "Brussels",
+      "time_zone_iana": "Europe/Brussels",
+      "utc_offset": 7200
+    },
+    "device": {
+      "friendly_id": "888F5E",
+      "percent_charged": 100,
+      "wifi_strength": 70,
+      "height": 300,
+      "width": 400,
+      "model": "og_plus",
+      "bit_depth": 2,
+      "firmware_version": "1.8.16",
+      "refresh_interval_seconds": 945,
+      "sleep_mode_enabled": false,
+      "sleep_start_time": 1320,
+      "sleep_end_time": 420,
+      "orientation": "landscape"
+    },
+    "system": {
+      "timestamp_utc": 1790941996
+    },
+    "plugin_settings": {
+      "instance_name": "Payment QR Code",
+      "refresh_interval_minutes": 15,
+      "strategy": "webhook",
+      "dark_mode": "no",
+      "no_screen_padding": "no",
+      "custom_fields_values": {
+        "data_source": "webhook",
+        "payment_type": "epc",
+        "show_title_bar": "true",
+        "icon": "none",
+        "body": "",
+        "title": "",
+        "footer": "",
+        "caption": "",
+        "qr_text": "",
+        "epc_iban": "X",
+        "epc_name": "X",
+        "image_url": "",
+        "title_bar": "",
+        "epc_amount": "",
+        "epc_reference": "",
+        "title_bar_icon": ""
+      },
+      "data_fetched_utc": 1790941803
+    },
+    "state": {}
+  }
+}

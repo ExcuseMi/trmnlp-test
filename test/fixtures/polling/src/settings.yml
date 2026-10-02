@@ -1,0 +1,16 @@
+name: Departures
+strategy: polling
+framework_version: 3.4.0
+polling_verb: get
+polling_url: |-
+  https://api.example.com/departures?station={{ station }}
+  https://api.example.com/alerts.xml
+polling_headers: authorization=Bearer {{ token }}
+custom_fields:
+  - keyname: station
+    field_type: string
+    name: Station
+  - keyname: token
+    field_type: password
+    name: Token
+    default: secret

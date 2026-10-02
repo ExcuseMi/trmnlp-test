@@ -1,0 +1,6 @@
+watch:
+  - src
+variables:
+  sensor:
+    temperature: 18
+    readings: [1, 2]

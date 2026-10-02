@@ -1,0 +1,9 @@
+name: Orders
+strategy: webhook
+framework_version: 3.4.0
+serverless_language: python
+custom_fields:
+  - keyname: currency
+    field_type: string
+    name: Currency
+    default: EUR

@@ -1,0 +1,42 @@
+@startuml render
+title trmnl.render(opts): one view on one device
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+participant "spec" as spec
+participant "Trmnl\n(src/trmnl.js)" as t
+participant "harness.rb" as h
+participant "mock proxy" as p
+participant "transform.*\n(subprocess)" as tx
+participant "Chromium page" as c
+
+spec -> t : render({ device, view, fields, webhook | data,\nmocks, transform, now, darkMode, ... })
+t -> t : device namespace from the model\nwebhook store (merge strategy, size limit)
+t -> h : run
+h -> h : custom fields = settings defaults\n+ .trmnlp.yml + test fields
+h -> h : trmnl namespace (user, device, system,\nplugin_settings, state)
+alt data given
+  h -> h : use it
+else webhook
+  h -> h : stored webhook data
+else polling
+  h -> h : render polling URLs with the fields,\nanswer from mocks, parse JSON / XML
+else static
+  h -> h : settings.yml static_data
+end
+opt transform file and transform !== false
+  h -> p : start (per run)
+  h -> tx : trmnlp wrapper, stdin = data + trmnl\n(FAKETIME, proxy env, deps path, 5 s)
+  tx -> p : HTTPS requests
+  p --> tx : mocked responses (recorded)
+  tx --> h : output JSON, stdout, stderr, ms, MB
+  h -> h : output replaces data,\ntrmnl_state becomes next state
+end
+h -> h : Liquid render (shared + view),\nTime.now frozen
+h --> t : markup, data, transform result, requests
+t -> c : page: screen classes + model CSS variables,\nmashup slot, framework version, theme
+c -> c : cached assets and fonts, fixed Date,\nwait for fonts + settle
+t --> spec : Screen
+spec -> c : locators, overflow, overlap
+spec -> t : png(): screenshot reduced to the palette,\nQR decode, snapshot
+@enduml
