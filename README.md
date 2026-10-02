@@ -71,7 +71,7 @@ const { test, expect, matrix, VIEWS, DEVICES, FRAMEWORK } = require('trmnlp-test
 test('menu', async ({ trmnl }) => {
   const screen = await trmnl.render({
     device: 'og_plus', view: 'full',          // any model, orientation: 'portrait', palette, theme, scale, textScale, fonts, framework
-    darkMode: true,                           // as the server does it: everything inverted except images ('framework': the v3 class only)
+    darkMode: true,                           // the screen inverted, `.image` elements kept ('framework': the v3 class only)
     qr: 'server',                             // qr_code as TRMNL's server returns it (default); 'trmnlp', 'fixed'
     crlf: true,                               // the template with CR LF newlines (e.g. pasted markup)
     fields: { data_source: 'webhook' },       // custom field values (defaults + .trmnlp.yml + these)
@@ -119,5 +119,5 @@ See [docs/README.md](docs/README.md) for diagrams of the components, a render, s
 ## Examples and self-tests
 
 - `examples/payment-qr`: the earlier webhook + serverless version of the payment QR plugin (the current version tests itself with trmnlp-test in its own repository).
-- `test/self/trmnlp-vs-trmnl.spec.js`: where trmnlp renders differently from TRMNL, as tests that fail on trmnlp's behaviour (marked `test.fail`, so they turn red once trmnlp matches). `TRMNLP_TEST_SHOW_DIFFERENCES=1` prints the failures.
+- `test/self/trmnlp-vs-trmnl.spec.js`: where trmnlp's `qr_code` renders differently from TRMNL, as tests that fail on trmnlp's behaviour (marked `test.fail`, so they turn red once trmnlp matches). `TRMNLP_TEST_SHOW_DIFFERENCES=1` prints the failures.
 - `test/self`: fixture plugins for every strategy and language (86 tests). Run with `bin/trmnlp-test run --root test/self`.

@@ -111,9 +111,10 @@ class Trmnl {
     const view = opts.view || (this.config.defaults && this.config.defaults.view) || 'full';
     const { run, o, info, device, darkMode, noBleed, now } = await this.run(opts, [view]);
     const framework = FRAMEWORK.resolve(o.framework || info.framework.setting || 'latest');
-    // dark mode: before v3 the framework class inverts the screen itself. From v3 the class only
-    // remaps framework colours and leaves inline SVG and hard-coded colours alone, while TRMNL's
-    // server inverts everything except images, so 'invert' (the default) does that instead.
+    // dark mode: before v3 the framework class inverts the screen and spares `.image` elements.
+    // From v3 the class only remaps framework colours and leaves inline SVG and hard-coded colours
+    // alone, while TRMNL's server preview still inverted an inline svg, so 'invert' (the default)
+    // applies the v2 rule instead.
     const v3 = FRAMEWORK.compare(framework, '3.0.0') >= 0;
     const darkClass = !!darkMode && (!v3 || darkMode === 'framework');
     const invert = !!darkMode && v3 && darkMode === 'invert';

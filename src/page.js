@@ -56,8 +56,9 @@ function buildPage({ markup, view, framework, classes, model, slot = 0, invert, 
     for (let i = 0; i < mashup.slots; i++) views.push(i === slot ? ours : `<div class="view view--${view}"></div>`);
     body = `<div class="${mashup.classes}">${views.join('')}</div>`;
   }
-  // TRMNL's dark mode: everything inverted except images
-  const legacyDark = invert ? '<style>.screen{filter:invert(1)} .screen img{filter:invert(1)}</style>' : '';
+  // TRMNL's dark mode, framework 1 and 2's own rule: the screen inverted, elements with the
+  // `image` class (<img> or <svg>) inverted again so they keep their colours
+  const legacyDark = invert ? '<style>.trmnl .screen{filter:invert(1)} .trmnl .screen .image{filter:invert(1)}</style>' : '';
   const themeCss = theme ? `<link rel="stylesheet" href="${assetHost}/css/${framework}/themes/${theme}-theme.css" />` : '';
   return `<!DOCTYPE html>
 <html>

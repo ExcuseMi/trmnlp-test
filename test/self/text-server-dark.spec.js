@@ -54,23 +54,24 @@ test.describe('dark mode', () => {
     const png = await s.png({ dither: false });
     const at = async (sel, d) => { const b = await s.box(sel); return png.pixel(b.x + d, b.y + d).gray; };
     return { s, bg: png.pixel(5, 5).gray, svgMargin: await at('[data-svg]', 4), svgSquare: await at('[data-svg]', 60), imgMargin: await at('[data-img]', 4), imgSquare: await at('[data-img]', 60),
-      classMargin: await at('[data-img-class]', 4) };
+      classMargin: await at('[data-img-class]', 4), svgClassMargin: await at('[data-svg-class]', 4) };
   }
-  test('true: like the server, everything inverted except images', async ({ trmnl }) => {
+  // the v2 rule: everything inverted, `.image` elements (img or svg) kept, a plain <img> inverted too
+  test('true: the screen inverted, .image elements kept', async ({ trmnl }) => {
     const p = await probe(trmnl, { darkMode: true });
-    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 255, imgSquare: 0, classMargin: 255 });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255, svgClassMargin: 255 });
     expect(p.s.classes).not.toContain('screen--dark-mode');
     expect(p.s.data.trmnl.plugin_settings.dark_mode).toBe('yes');
   });
   test("'framework': only the class, inline svg keeps its colours", async ({ trmnl }) => {
     const p = await probe(trmnl, { darkMode: 'framework' });
-    expect(p).toMatchObject({ bg: 0, svgMargin: 255, svgSquare: 0, imgMargin: 255, imgSquare: 0 });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 255, svgSquare: 0, imgMargin: 255, imgSquare: 0, svgClassMargin: 255 });
     expect(p.s.classes).toContain('screen--dark-mode');
   });
   // framework 2 does it with its own class, and spares only images with the framework's `image` class
-  test('framework 2: the class inverts, except <img class="image">', async ({ trmnl }) => {
+  test('framework 2: the class inverts, except .image elements', async ({ trmnl }) => {
     const p = await probe(trmnl, { darkMode: true, framework: '2.0.1' });
-    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255 });
+    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255, svgClassMargin: 255 });
   });
 });
 
