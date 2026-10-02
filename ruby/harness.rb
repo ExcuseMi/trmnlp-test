@@ -262,7 +262,9 @@ module TrmnlpTest
           end
         table.record('method' => verb, 'url' => url, 'headers' => headers, 'body' => body,
                      'mocked' => !mock.nil?, 'status' => status, 'via' => 'polling')
-        poller.send(:parse_response, Response.new(status, rbody, rheaders.transform_keys(&:downcase)))
+        response = Response.new(status, rbody, rheaders.transform_keys(&:downcase))
+        # trmnlp 0.14.2 added the url (for its warning on a non-2xx status)
+        poller.method(:parse_response).arity == 1 ? poller.send(:parse_response, response) : poller.send(:parse_response, response, url)
       end
       responses.size == 1 ? stringify_keys(responses.first) : responses.each_with_index.to_h { |r, i| ["IDX_#{i}", stringify_keys(r)] }
     end

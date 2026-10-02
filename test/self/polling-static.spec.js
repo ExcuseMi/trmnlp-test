@@ -20,3 +20,14 @@ test('static data from settings.yml, on framework 2', async ({ trmnl }) => {
   await expect(screen.locator('[data-author]')).toHaveText('Dijkstra');
   expect(screen).toRenderCleanly();
 });
+
+// trmnlp 0.14.2, like the hosted service: a non-2xx polling body still reaches the data
+test('polling: a 202 "pending job" body reaches the template', async ({ trmnl }) => {
+  const screen = await trmnl.plugin('../fixtures/polling').render({
+    mocks: {
+      'https://api.example.com/departures?station=GNT': { status: 202, json: { job_id: 'abc', poll: 'later' } },
+      'https://api.example.com/alerts.xml': { body: '<alerts/>', headers: { 'content-type': 'application/xml' } },
+    },
+  });
+  expect(screen.data.IDX_0).toMatchObject({ job_id: 'abc' });
+});
