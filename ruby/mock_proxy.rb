@@ -88,10 +88,12 @@ module TrmnlpTest
     attr_reader :requests
 
     attr_reader :callback
+    attr_accessor :clock
 
     # callback: answers a computed mock (one with 'dynamic', its respond function lives in Node)
     def initialize(mocks, network, callback: nil)
       @callback = callback
+      @clock = nil
       @mocks = (mocks || []).map { |m| m.merge('used' => 0) }
       @network = network || 'mock'
       @requests = []
@@ -119,6 +121,22 @@ module TrmnlpTest
     end
 
     def record(entry) = @lock.synchronize { @requests << entry }
+
+    def advance_clock?(mock) = mock['advanceClockMs'].to_f.positive?
+
+    # Moves the transform's frozen clock forward (a mock's advanceClockMs, whole seconds): the
+    # runtime reads its time from clock.file, written atomically so it never sees half a line.
+    def advance_clock(ms)
+      return unless @clock
+
+      @lock.synchronize do
+        @clock[:offset] += ms.to_f / 1000
+        time = Time.at(@clock[:base].to_f + @clock[:offset]).utc
+        tmp = "#{@clock[:file]}.tmp"
+        File.write(tmp, "@#{time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        File.rename(tmp, @clock[:file])
+      end
+    end
 
     private
 
@@ -253,7 +271,11 @@ module TrmnlpTest
       mock = @table.find(method, url)
       mock = MockResponse.resolve(mock, @table, entry.dup) if mock
       if mock
-        sleep(mock['delayMs'] / 1000.0) if mock['delayMs']
+        if mock['delayMs'] && gone?(io, mock['delayMs'] / 1000.0)
+          @table.record(entry.merge('mocked' => true, 'status' => nil, 'aborted' => true))
+          return
+        end
+        @table.advance_clock(mock['advanceClockMs']) if @table.advance_clock?(mock)
         if mock['error'] == 'reset'
           @table.record(entry.merge('mocked' => true, 'status' => nil, 'error' => 'reset'))
           return
@@ -264,8 +286,21 @@ module TrmnlpTest
       else
         status, resp_headers, resp_body = MockResponse.unmocked(method, url)
       end
-      @table.record(entry.merge('mocked' => !mock.nil?, 'status' => status))
-      write_response(io, status, resp_headers, resp_body, body_delay: mock && mock['bodyDelayMs'])
+      aborted = write_response(io, status, resp_headers, resp_body, body_delay: mock && mock['bodyDelayMs'])
+      @table.record(entry.merge('mocked' => !mock.nil?, 'status' => status, **(aborted ? { 'aborted' => true } : {})))
+    end
+
+    # Waits `seconds`, and answers whether the client gave up meanwhile (its timeout or abort
+    # signal closed the connection). With one request per connection, anything readable on the
+    # socket after the request is the client leaving.
+    def gone?(io, seconds)
+      tcp = io.respond_to?(:to_io) ? io.to_io : io
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+      loop do
+        left = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        return false if left <= 0
+        return true if IO.select([tcp], nil, nil, [left, 0.05].min)
+      end
     end
 
     def forward(method, url, headers, body)
@@ -281,7 +316,8 @@ module TrmnlpTest
       [502, { 'content-type' => 'text/plain' }, "trmnlp-test: live request failed: #{e.message}"]
     end
 
-    # body_delay: the headers go out at once, the body after that many ms (a slow server)
+    # body_delay: the headers go out at once, the body after that many ms (a slow server).
+    # => true when the client gave up before the body was sent
     def write_response(io, status, headers, body, body_delay: nil)
       body = body.b
       out = +"HTTP/1.1 #{status} #{status_text(status)}\r\n"
@@ -290,12 +326,16 @@ module TrmnlpTest
       if body_delay
         io.write(out.b)
         io.flush
-        sleep(body_delay / 1000.0)
+        return true if gone?(io, body_delay / 1000.0)
+
         io.write(body)
       else
         io.write(out.b + body)
       end
       io.flush
+      false
+    rescue IOError, SystemCallError
+      true
     end
 
     def status_text(status) = Net::HTTPResponse::CODE_TO_OBJ[status.to_s]&.name&.sub('Net::HTTP', '') || 'Status'

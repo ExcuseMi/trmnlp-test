@@ -96,3 +96,29 @@ test.describe('render options', () => {
     expect(without.customFields.label).toBeUndefined();
   });
 });
+
+test.describe('mocks and the transform\'s clock and signals', () => {
+  test('a fetch the transform gives up on is recorded as aborted', async ({ trmnl }) => {
+    const run = await trmnl.plugin('../fixtures/clock').transform({ mocks: [{ url: 'https://api.example.com/slow', json: {}, delayMs: 3000 }, { url: 'https://api.example.com/tick', body: '' }] });
+    expect(run.output.status).toBe('TimeoutError');
+    expect(run).toHaveRequested('https://api.example.com/slow', { times: 1 });
+    expect(run.requests.find((r) => r.url.endsWith('/slow'))).toMatchObject({ aborted: true, status: null });
+  });
+
+  test('advanceClockMs moves the transform\'s clock when the mock answers', async ({ trmnl }) => {
+    const run = await trmnl.plugin('../fixtures/clock').transform({ mocks: [{ url: 'https://api.example.com/slow', json: {} }, { url: 'https://api.example.com/tick', body: '', advanceClockMs: 60000 }] });
+    expect(run.output.status).toBe('ok');
+    expect(run.output.elapsedMs).toBeGreaterThanOrEqual(59000);
+    expect(run.output.elapsedMs).toBeLessThan(65000);
+  });
+
+  test('in the browser, a catch-all mock skips trmnl.com unless it names it', async ({ trmnl }) => {
+    const img = '<img data-i src="https://trmnl.com/images/plugins/trmnl--render.svg" width="10" height="10">';
+    const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const a = await trmnl.renderMarkup(img, { bare: true, mocks: [{ url: '*', status: 404 }] });
+    expect(a.requests.filter((r) => r.mocked)).toEqual([]);
+    const b = await trmnl.renderMarkup(img, { bare: true, mocks: [{ url: 'https://trmnl.com/images/*', bodyBase64: pixel, headers: { 'content-type': 'image/png' } }] });
+    expect(b.requests.filter((r) => r.mocked).length).toBe(1);
+    expect(await b.page.evaluate(() => document.querySelector('[data-i]').naturalWidth)).toBe(1);
+  });
+});

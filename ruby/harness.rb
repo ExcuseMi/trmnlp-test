@@ -388,7 +388,9 @@ module TrmnlpTest
         mem_path = File.join(dir, 'mem')
         argv = ['/usr/bin/time', '-f', '%M', '-o', mem_path, cmd, *interpreter_flags(language), src]
         argv = argv.drop(5) unless File.executable?('/usr/bin/time')
+        @clock = nil
         env = transform_env(language, proxy.port, now, dir, req)
+        table.clock = @clock
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         stdout, stderr, status, timed_out = spawn_with_timeout(env, argv, JSON.generate(input), timeout_s, dir)
         duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
@@ -441,9 +443,19 @@ module TrmnlpTest
       }
       if req['freezeTime'] != false && LIBFAKETIME
         env['LD_PRELOAD'] = LIBFAKETIME
-        env['FAKETIME'] = "@#{now.strftime('%Y-%m-%d %H:%M:%S')}"
         env['FAKETIME_DONT_FAKE_MONOTONIC'] = '1'
         env['FAKETIME_DONT_RESET'] = '1'
+        spec = "@#{now.strftime('%Y-%m-%d %H:%M:%S')}"
+        if (req['mocks'] || []).any? { |m| m['advanceClockMs'] || m['dynamic'] }
+          # a mock may move the clock: the runtime reads it from a file, re-read on every call
+          file = File.join(dir, 'faketime')
+          File.write(file, "#{spec}\n")
+          env['FAKETIME_TIMESTAMP_FILE'] = file
+          env['FAKETIME_NO_CACHE'] = '1'
+          @clock = { file:, base: now, offset: 0 }
+        else
+          env['FAKETIME'] = spec
+        end
       end
       deps = ENV["TRMNLP_TEST_DEPS_#{language.upcase}"]
       case language

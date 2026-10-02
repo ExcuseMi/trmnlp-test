@@ -1,0 +1,5 @@
+name: Clock
+strategy: static
+static_data: '{}'
+framework_version: 3.4.0
+serverless_language: node

@@ -1,6 +1,6 @@
 # trmnlp-test specification
 
-Version 0.1.15. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
+Version 0.1.16. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
 
 ## 1. Purpose
 
@@ -162,7 +162,7 @@ The hosted built-ins are always installed: `requests` for Python and `httparty` 
 `mocks` is a list or an object:
 
 ```js
-mocks: [{ url, method?, status?, headers?, json? | body? | bodyBase64?, times?, delayMs?, bodyDelayMs?, error?: 'reset', respond? }]
+mocks: [{ url, method?, status?, headers?, json? | body? | bodyBase64?, times?, delayMs?, bodyDelayMs?, advanceClockMs?, error?: 'reset', respond? }]
 mocks: { 'https://api.example.com/x': { temp: 21 } }   // plain value = json; string = body
 mocks: { 'https://api.example.com/*': (req) => ({ json: { city: new URL(req.url).searchParams.get('q') } }) }
 ```
@@ -171,10 +171,12 @@ mocks: { 'https://api.example.com/*': (req) => ({ json: { city: new URL(req.url)
 - `times` limits how often a mock answers; the next matching mock answers after it.
 - `respond(request)` computes the answer (the same keys as a mock) from `{ method, url, headers, rawHeaders, body }`. It may be async. For the transform and polling, the harness calls back into Node for it.
 - `delayMs` delays the whole answer; `bodyDelayMs` sends the headers at once and the body after the delay (a slow server). `error: 'reset'` drops the connection.
+- A transform that gives up on a request during a delay (its timeout or abort signal closes the connection) gets the request recorded with `aborted: true` and no status.
+- `advanceClockMs` moves the transform's frozen clock forward, in whole seconds, when the mock answers (the time a slow API took). The runtime then reads its time from a file that the proxy rewrites; this mode is on only when a mock can move the clock (`advanceClockMs`, or `respond`).
 - Mocks apply to the transform (through an HTTPS proxy with its own CA, so they work with any library that honours `HTTP(S)_PROXY`), to polling, and to the browser.
 - A server-side request with no mock gets status 599 and is reported by `toRenderCleanly`. Unmocked browser requests (images) are fetched and cached.
-- Every request is recorded: `method`, `url`, `headers` (by lower-case name), `rawHeaders` (`[name, value]` as sent), `body`, `mocked`, `status`, `error` (`'reset'`), `via`.
-- The page's own framework files never pass through mocks, so a catch-all mock (`url: '*'`) only answers the plugin's requests.
+- Every request is recorded: `method`, `url`, `headers` (by lower-case name), `rawHeaders` (`[name, value]` as sent), `body`, `mocked`, `status`, `error` (`'reset'`), `aborted`, `via`.
+- The page's own framework files never pass through mocks. In the browser, a wildcard or regex mock also skips trmnl.com URLs (images and other files of TRMNL's), so a catch-all mock (`url: '*'`) only answers the plugin's own requests. A mock whose URL starts with `https://trmnl.com` still answers them.
 
 ### 5.8 Sessions
 

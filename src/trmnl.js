@@ -54,7 +54,7 @@ function toSeconds(now) {
 // mocks: [{url, json|body|bodyBase64, status, headers, method, times, delayMs, bodyDelayMs, error, respond}]
 // or {'https://api/x': {json}} or {'https://api/x': {...plain object = json}} or {'https://api/x': (req) => answer}
 // respond(request) computes the answer (same keys as a mock) from { method, url, headers, rawHeaders, body }.
-const MOCK_KEYS = ['json', 'body', 'bodyBase64', 'status', 'headers', 'error', 'delayMs', 'bodyDelayMs', 'times', 'method', 'respond'];
+const MOCK_KEYS = ['json', 'body', 'bodyBase64', 'status', 'headers', 'error', 'delayMs', 'bodyDelayMs', 'advanceClockMs', 'times', 'method', 'respond'];
 function normaliseMocks(mocks) {
   if (!mocks) return [];
   if (Array.isArray(mocks)) return mocks;

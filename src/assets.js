@@ -8,10 +8,13 @@ const crypto = require('crypto');
 const { cacheDir, writeAtomic } = require('./paths');
 
 
-function matchMock(mocks, method, url) {
+// protect: a host whose files only a mock naming it answers (a wildcard or regex mock skips it),
+// so a catch-all for the plugin's APIs leaves TRMNL's own images and files alone
+function matchMock(mocks, method, url, { protect } = {}) {
   for (const m of mocks || []) {
     if (m.method && m.method.toUpperCase() !== method) continue;
     const p = m.url;
+    if (protect && url.startsWith(protect) && !p.startsWith(protect)) continue;
     let hit;
     if (p.length > 1 && p.startsWith('/') && p.endsWith('/')) hit = new RegExp(p.slice(1, -1)).test(url);
     else {
@@ -58,7 +61,7 @@ async function cachedFetch(url, { offline }) {
 async function handleExternal(route, ctx, assetHost = 'https://trmnl.com') {
   const req = route.request();
   const url = req.url();
-  let mock = matchMock(ctx.mocks, req.method(), url);
+  let mock = matchMock(ctx.mocks, req.method(), url, { protect: assetHost });
   if (mock) {
     const request = { method: req.method(), url, headers: req.headers(), body: req.postData() };
     if (typeof mock.respond === 'function') mock = { ...(await mock.respond(request)) };
