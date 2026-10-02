@@ -12,6 +12,8 @@ const { loadConfig } = require('./config');
 const { Png, quantize } = require('./png');
 
 const config = loadConfig();
+// arguments after `--` on the command line (trmnlp-test run -- --rebaseline)
+const args = JSON.parse(process.env.TRMNLP_TEST_ARGS || '[]');
 
 const test = base.test.extend({
   trmnlHarness: [async ({}, use) => { // eslint-disable-line no-empty-pattern
@@ -65,5 +67,5 @@ const DEVICES = {
 
 module.exports = {
   test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, SCALES, TEXT_SCALES, THEMES, QR_MODES,
-  MODELS: models.MODELS, PALETTES: models.PALETTES, config, Png, quantize,
+  MODELS: models.MODELS, PALETTES: models.PALETTES, config, args, Png, quantize,
 };

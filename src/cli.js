@@ -11,9 +11,14 @@ const ROOT = path.join(__dirname, '..');
 const USAGE = path.join(ROOT, 'lib', 'trmnlp_test', 'usage.txt');
 const ALIASES = { '-h': 'help', '--help': 'help', '-v': 'version', '--version': 'version' };
 
+const COMMANDS = ['run', 'init', 'models', 'versions', 'refresh', 'help', 'version'];
 const argv = process.argv.slice(2);
+// everything after `--` is for the specs: require('trmnlp-test').args
+const dashes = argv.indexOf('--');
+const specArgs = dashes >= 0 ? argv.splice(dashes).slice(1) : [];
 if (ALIASES[argv[0]]) argv[0] = ALIASES[argv[0]];
-const cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'run';
+// anything else in first place (a spec file, a filter) is a run of those tests
+const cmd = argv[0] && COMMANDS.includes(argv[0]) ? argv.shift() : 'run';
 
 function versions() {
   const read = (file, re) => { try { return fs.readFileSync(file, 'utf8').match(re)[1]; } catch { return null; } };
@@ -106,7 +111,7 @@ async function run() {
   const pwCli = require.resolve('@playwright/test/cli');
   const res = spawnSync(process.execPath, [pwCli, 'test', '--config', playwrightConfig(cfg), ...argv], {
     stdio: 'inherit', cwd: cfg.root,
-    env: { ...process.env, ...depsEnv, TRMNLP_TEST_CONFIG: JSON.stringify(cfg),
+    env: { ...process.env, ...depsEnv, TRMNLP_TEST_CONFIG: JSON.stringify(cfg), TRMNLP_TEST_ARGS: JSON.stringify(specArgs),
       NODE_PATH: [path.join(__dirname, '..', 'node_modules'), path.join(__dirname, '..', '..'), process.env.NODE_PATH].filter(Boolean).join(path.delimiter) },
   });
   console.log(`\ntrmnlp-test: report in ${path.join(cfg.report, 'index.html')} (Playwright report: ${path.join(cfg.report, 'html', 'index.html')})`);
@@ -156,8 +161,7 @@ async function main() {
       console.log(versions());
       return;
     default:
-      process.stderr.write(`trmnlp-test: unknown command "${cmd}"\n\n${fs.readFileSync(USAGE, 'utf8')}`);
-      process.exit(2);
+      throw new Error(`unhandled command ${cmd}`);
   }
 }
 

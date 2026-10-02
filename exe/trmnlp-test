@@ -2,7 +2,8 @@
 # frozen_string_literal: true
 
 # Runs trmnlp-test (a Docker image) against a TRMNL plugin repository.
-#   trmnlp-test [--repo DIR] [--mount DIR]... [run|init|models|versions|refresh|update|shell|version] [playwright args]
+#   trmnlp-test [run|init|models|versions|refresh|update|shell|version|help] [args] [-- spec args]
+# --repo DIR, --mount DIR and --env NAME[=VALUE] are taken from anywhere before `--`.
 require 'etc'
 require 'fileutils'
 require_relative '../lib/trmnlp_test/version'
@@ -11,12 +12,25 @@ require_relative '../lib/trmnlp_test/version'
 image = ENV.fetch('TRMNLP_TEST_IMAGE', "#{TrmnlpTest::IMAGE}:latest")
 repo = Dir.pwd
 mounts = []
-args = ARGV.dup
-while %w[--repo --mount].include?(args.first)
-  flag, dir = args.shift(2)
-  abort "trmnlp-test: #{flag} needs a directory" unless dir
-  path = File.realpath(dir)
-  flag == '--repo' ? repo = path : mounts += ['-v', "#{path}:#{path}"]
+# the container sees TRMNLP_TEST_* and CI; --env NAME[=VALUE] passes more
+env = %w[CI FORCE_COLOR].flat_map { |k| ['-e', k] } + ENV.keys.grep(/\ATRMNLP_TEST_/).flat_map { |k| ['-e', k] }
+args = []
+rest = ARGV.dup
+until rest.empty?
+  arg = rest.shift
+  if arg == '--'
+    args.push(arg, *rest)
+    break
+  elsif %w[--repo --mount --env].include?(arg)
+    value = rest.shift or abort("trmnlp-test: #{arg} needs a value")
+    case arg
+    when '--repo' then repo = File.realpath(value)
+    when '--mount' then (path = File.realpath(value)) && mounts.push('-v', "#{path}:#{path}")
+    else env.push('-e', value)
+    end
+  else
+    args << arg
+  end
 end
 
 USAGE = File.read(File.expand_path('../lib/trmnlp_test/usage.txt', __dir__))
@@ -59,6 +73,5 @@ if args.first == 'shell'
   entry = ['--entrypoint', 'bash']
 end
 tty = $stdout.tty? ? ['-t'] : []
-env = %w[CI TRMNLP_TEST_DEBUG TRMNLP_TEST_WORKERS TRMNLP_TEST_SHOW_DIFFERENCES FORCE_COLOR].flat_map { |k| ['-e', k] }
 exec 'docker', 'run', '--rm', '-i', *tty, '--init', '--ipc=host', '-u', "#{Process.uid}:#{Process.gid}",
      '-v', "#{repo}:#{repo}", '-w', repo, '-v', "#{cache}:/cache", *mounts, *env, *entry, image, *args

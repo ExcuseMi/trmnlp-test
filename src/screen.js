@@ -74,6 +74,50 @@ class Screen {
     return reduce ? new Png(quantize(png.png, this.device.palette, { dither }), { palette: this.device.palette, model: this.device.model }) : png;
   }
 
+  // Compares part of the device picture with a reference image (a photo, a scan, an exported
+  // drawing): the reference, or its refRect, is resized to the compared area and scored by the
+  // IoU of the ink. => { iou, picture, reference, diff, rect }
+  //   reference: an image file or a Png;  rect | selector: the area of the picture (default all)
+  //   refRect: the matching area of the reference (default all);  threshold, ink: see Png.mask
+  async compareReference(reference, { rect, selector, refRect, threshold = 128, ink = 'dark', filter } = {}) {
+    let area = rect;
+    if (selector) {
+      const b = await this.box(selector);
+      if (!b) throw new Error(`${this.label}: no element matches ${selector}`);
+      area = b;
+    }
+    const full = await this.png({ dither: false });
+    const picture = area ? full.crop(area) : full;
+    let ref = reference instanceof Png ? reference : Png.fromFile(reference);
+    if (refRect) ref = ref.crop(refRect);
+    ref = ref.resize(picture.width, picture.height, filter ? { filter } : {});
+    const opts = { threshold, ink };
+    return { iou: picture.iou(ref, opts), picture, reference: ref, diff: picture.diff(ref, opts), rect: area || { x: 0, y: 0, width: full.width, height: full.height } };
+  }
+
+  // Turns the screen after load, as the device does when it is rotated: the iframe and the
+  // picture swap their size and the screen gets (or loses) screen--portrait. The data and the
+  // Liquid output stay as rendered; the framework and the plugin's own scripts see the new size.
+  async setOrientation(orientation) {
+    if (!['landscape', 'portrait'].includes(orientation)) throw new Error(`orientation must be landscape or portrait (got ${orientation})`);
+    if (orientation === this.device.orientation) return this;
+    const { width, height } = this.device;
+    this.device = { ...this.device, width: height, height: width, orientation };
+    await this.iframe.evaluate((f, size) => { f.style.width = size.width + 'px'; f.style.height = size.height + 'px'; }, { width: height, height: width });
+    this.host.active = null;
+    await this.host.activate(this);
+    await this.page.evaluate((portrait) => new Promise((done) => {
+      document.querySelector('.screen').classList.toggle('screen--portrait', portrait);
+      window.dispatchEvent(new Event('resize'));
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    }), orientation === 'portrait');
+    this.classes = await this.page.evaluate(() => document.querySelector('.screen').className);
+    this.screenBox = await this.page.locator('.screen').first().boundingBox();
+    this._raw = null;
+    this._png = null;
+    return this;
+  }
+
   async qrInfo(rect) {
     // decode the undithered picture: dither noise around modules only ever hurts a scanner
     const png = await this.png({ dither: false });

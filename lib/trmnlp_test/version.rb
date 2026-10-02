@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
 module TrmnlpTest
-  VERSION = '0.1.12'
+  VERSION = '0.1.13'
   IMAGE = 'ghcr.io/excusemi/trmnlp-test'
 end

@@ -67,6 +67,13 @@ class Png {
 
   static fromBuffer(buffer, meta) { return new Png(PNG.sync.read(buffer), meta); }
 
+  // any image ImageMagick reads (PNG, JPEG, WebP, GIF, BMP, ...), as RGBA
+  static fromFile(file) {
+    if (!fs.existsSync(file)) throw new Error(`no such image: ${file}`);
+    const out = execFileSync('convert', [file + '[0]', '-alpha', 'on', 'png32:-'], { maxBuffer: 256 * 1024 * 1024 });
+    return Png.fromBuffer(out);
+  }
+
   get buffer() { return this._buffer || (this._buffer = PNG.sync.write(this.png)); }
 
   pixel(x, y) {
@@ -130,6 +137,46 @@ class Png {
     const d = this.png.data;
     for (let i = 0; i < d.length; i += 4) { out.data[i] = 255 - d[i]; out.data[i + 1] = 255 - d[i + 1]; out.data[i + 2] = 255 - d[i + 2]; out.data[i + 3] = d[i + 3]; }
     return new Png(out, { palette: this.palette, model: this.model });
+  }
+
+  // A copy at width x height (exact, aspect ratio not kept). The default filter is Catmull-Rom,
+  // the bicubic of Pillow's Image.resize(BICUBIC); 'point' keeps hard pixel edges.
+  resize(width, height, { filter = 'Catrom' } = {}) {
+    const out = execFileSync('convert', ['png:-', '-filter', filter, '-resize', `${Math.round(width)}x${Math.round(height)}!`, 'png32:-'],
+      { input: this.buffer, maxBuffer: 256 * 1024 * 1024 });
+    return Png.fromBuffer(out, { palette: this.palette, model: this.model });
+  }
+
+  // 1 for ink, 0 for paper: ink is darker than `threshold` (0-255), or lighter with ink: 'light'
+  mask({ threshold = 128, ink = 'dark' } = {}) {
+    const m = new Uint8Array(this.width * this.height), d = this.png.data;
+    for (let i = 0; i < m.length; i++) {
+      const g = lum(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+      m[i] = (ink === 'dark' ? g < threshold : g >= threshold) ? 1 : 0;
+    }
+    return m;
+  }
+
+  // Intersection over union of the ink of two pictures of the same size: 1 is the same drawing,
+  // 0 nothing in common. Two blank pictures score 1.
+  iou(other, opts = {}) {
+    if (other.width !== this.width || other.height !== this.height) throw new Error(`iou needs equal sizes: ${this.width}x${this.height} and ${other.width}x${other.height} (resize one first)`);
+    const a = this.mask(opts), b = other.mask(opts);
+    let both = 0, either = 0;
+    for (let i = 0; i < a.length; i++) { if (a[i] && b[i]) both++; if (a[i] || b[i]) either++; }
+    return either ? both / either : 1;
+  }
+
+  // Where two pictures of the same size differ: gray where both have ink, red where only this one
+  // has, blue where only the other has, white where neither.
+  diff(other, opts = {}) {
+    const a = this.mask(opts), b = other.mask(opts);
+    const out = new PNG({ width: this.width, height: this.height });
+    for (let i = 0; i < a.length; i++) {
+      const c = a[i] && b[i] ? [128, 128, 128] : a[i] ? [220, 0, 0] : b[i] ? [0, 70, 220] : [255, 255, 255];
+      out.data[i * 4] = c[0]; out.data[i * 4 + 1] = c[1]; out.data[i * 4 + 2] = c[2]; out.data[i * 4 + 3] = 255;
+    }
+    return new Png(out);
   }
 
   // every QR code / barcode zbar finds, as text

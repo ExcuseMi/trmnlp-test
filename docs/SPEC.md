@@ -1,6 +1,6 @@
 # trmnlp-test specification
 
-Version 0.1.12. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
+Version 0.1.13. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
 
 ## 1. Purpose
 
@@ -25,7 +25,7 @@ Requires Ruby 3.0 or later and Docker. The gem contains only a launcher. Everyth
 
 ### 2.2 Commands
 
-`trmnlp-test [options] [command] [args]`, run from a plugin repository.
+`trmnlp-test [command] [args] [options] [-- spec args]`, run from a plugin repository. `--repo`, `--mount` and `--env` are accepted anywhere before `--`. A first argument that is not a command (a spec file or a filter, e.g. `trmnlp-test views.spec`) runs those tests.
 
 | Command | What it does |
 |---|---|
@@ -42,7 +42,9 @@ Requires Ruby 3.0 or later and Docker. The gem contains only a launcher. Everyth
 | Option | Meaning |
 |---|---|
 | `--repo DIR` | Plugin repository (default: the current directory). Mounted at the same path in the container. |
-| `--mount DIR` | Also mounts `DIR` (repeatable). Must come before the command. |
+| `--mount DIR` | Also mounts `DIR` (repeatable). |
+| `--env NAME[=VALUE]` | Passes an environment variable to the specs (repeatable). `TRMNLP_TEST_*` variables always pass. |
+| `-- ARGS` | Everything after `--` reaches the specs as `require('trmnlp-test').args`, e.g. `trmnlp-test run -- --rebaseline`. |
 | `--root DIR` | The directory containing `trmnlp-test.config.js`. |
 | `--report DIR` | Report directory; overrides the config. |
 
@@ -292,7 +294,7 @@ Half and quadrant views are real mashup slots, not smaller screens.
 
 ```js
 const { test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, QR_MODES, SCALES, TEXT_SCALES, THEMES,
-        MODELS, PALETTES, Png, quantize, config } = require('trmnlp-test');
+        MODELS, PALETTES, Png, quantize, config, args } = require('trmnlp-test');
 ```
 
 `test` is Playwright's `test` with the fixture `trmnl`; `expect` is Playwright's `expect` with the matchers of section 9.
@@ -328,6 +330,8 @@ const { test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, QR_MODES, SCALES, TEXT_
 | `png({ dither = true })` | The device picture: the screenshot reduced to the device palette (Floyd-Steinberg, or the nearest colour with `dither: false`). Full-colour palettes are left as they are. |
 | `rawPng()` | The screenshot before reduction. |
 | `elementPng(sel, { quantize, dither })` | The picture of one element. |
+| `compareReference(reference, { rect \| selector, refRect, threshold = 128, ink = 'dark', filter })` | `{ iou, picture, reference, diff, rect }`: the compared area of the device picture against a reference image (a file or a `Png`), or its `refRect`, resized to the area. |
+| `setOrientation('portrait' \| 'landscape')` | Turns the screen after load: the iframe and picture swap size, and `screen--portrait` is toggled. The plugin's scripts get a `resize` event. Data and Liquid output stay as rendered. |
 | `qrInfo(rect?)` | `{ text, inverted }`: tried as drawn, then inverted. |
 | `qr(rect?, { inverted })` | The decoded text: black on white by default, `true` for white on black, `'any'` for either. |
 | `box(sel)`, `boxes(sel)` | Bounding boxes in screen pixels. |
@@ -343,7 +347,7 @@ The fields of section 5.5, plus `data`, `mergeVariables`, `polling`, `state`, an
 
 ### 8.4 `Png`
 
-`width`, `height`, `buffer`, `pixel(x, y)` (`{ r, g, b, gray, hex }`), `crop(rect)`, `inverted()`, `histogram(rect)`, `colors(rect)`, `background(rect)`, `inkRatio(rect)`, `isBlank(rect)`, `inkBounds(rect)`, `decodeQr(rect)` (zbar), `deviceBytes()` (PNG size at the palette's depth), `save(file)`. `quantize(png, palette, { dither })` is exported.
+`Png.fromFile(file)` (any image ImageMagick reads), `Png.fromBuffer(buffer)`, `width`, `height`, `buffer`, `pixel(x, y)` (`{ r, g, b, gray, hex }`), `crop(rect)`, `resize(w, h, { filter = 'Catrom' })` (the bicubic of Pillow's `resize(BICUBIC)`; `'point'` keeps hard edges), `mask({ threshold, ink })`, `iou(other, { threshold, ink })` (intersection over union of the ink; equal sizes), `diff(other)` (gray both, red this only, blue other only), `inverted()`, `histogram(rect)`, `colors(rect)`, `background(rect)`, `inkRatio(rect)`, `isBlank(rect)`, `inkBounds(rect)`, `decodeQr(rect)` (zbar), `deviceBytes()` (PNG size at the palette's depth), `save(file)`. `quantize(png, palette, { dither })` is exported.
 
 ### 8.5 Helpers
 
@@ -363,6 +367,7 @@ The fields of section 5.5, plus `data`, `mergeVariables`, `polling`, `state`, an
 | `toShowText(text \| regex, { selector = '.view', visible = true })` | The text is present and every character of it is visible: inside each clipping ancestor (overflow, ellipsis, line clamp) and inside the view. `visible: false` only checks the content. |
 | `toHaveQr(expected \| regex \| null, { rect, inverted = false })` | The picture's QR code decodes to `expected` with the required polarity. `null`: no code. The message says when a code only decodes inverted. |
 | `toMatchScreen(name?, opts)` | The device picture equals the stored PNG (Playwright snapshot; `--update-snapshots` writes it). Stored under `<tests>/__screens__/<spec>/`. |
+| `toMatchReference(reference, { rect \| selector, refRect, minIoU = 0.9, threshold, ink, filter })` | The compared area scores at least `minIoU` against the reference (see `compareReference`). A relative path is resolved from the spec's folder. The diff and the resized reference are attached to the test. |
 | `toFitDeviceImageLimit()` | `deviceBytes()` is at most the model's `image_size_limit`. |
 | `toBeBlank(rect?)` | The area has one colour (on a `Screen` or a `Png`). |
 | `toStayWithinServerlessLimits({ timeoutMs = 5000, memoryMb = 128 })` | The transform ran within the limits. |
@@ -374,7 +379,8 @@ The fields of section 5.5, plus `data`, `mergeVariables`, `polling`, `state`, an
 
 - `<report>/index.html`: the gallery. Every test with its status, duration, errors, device pictures (framed), the transform's time and memory per picture, and the problems found. Filterable by status and text.
 - `<report>/html/`: Playwright's report, with traces, snapshot diffs, and the page HTML of failed renders.
-- `<report>/summary.md`: totals and failed tests in Markdown (used by the GitHub Action).
+- `<report>/summary.md`: totals, failed tests and skipped tests with their reasons, in Markdown (used by the GitHub Action).
+- The console ends with the skipped tests and their reasons, which Playwright's list does not show; the gallery shows them too.
 - `<report>/results/`: Playwright's output.
 - Each test attaches `trmnl.json`: per render, the label, model, view, framework, classes, transform metrics, problems and request count.
 
@@ -415,5 +421,4 @@ The action installs Ruby and the gem, caches `~/.cache/trmnlp-test`, runs the te
 - **TRMNL's own data disagrees for the Kindle PW 6th gen:** the models API says 800×600 at 1.28 and framework 3.4 says 800×592, so its screen ends about 10 px short of the panel.
 - **Dark mode on framework 3.x is the framework's colour remap.** What a physical device shows has not been checked against a photo.
 - **No PDF rendering in the image.** References from PDFs need a host step.
-- **No built-in comparison against a reference image** (region IoU). Specs compute it from `Png`.
 - **The 15 MB framework stylesheet** is parsed once per worker and device scale. Changing `deviceScale` costs one parse.

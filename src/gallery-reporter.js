@@ -40,6 +40,7 @@ class GalleryReporter {
     this.tests.push({
       file: path.relative(this.rootDir, test.location.file), line: test.location.line,
       title: test.titlePath().slice(3).join(' › ') || test.title, status: res.status, expected: test.expectedStatus,
+      skip: res.status === 'skipped' ? (test.annotations.concat(res.annotations || []).find((a) => a.type === 'skip' || a.type === 'fixme') || {}).description || '' : null,
       duration: res.duration, errors: res.errors.map((e) => strip(e.message || e.value)).slice(0, 3), images, meta,
     });
   }
@@ -70,6 +71,7 @@ class GalleryReporter {
         <header><span class="pill">${ok ? (t.status === 'skipped' ? 'skipped' : 'passed') : esc(t.status)}</span>
         <h3>${esc(t.title)}</h3><span class="muted">${(t.duration / 1000).toFixed(1)} s · ${esc(t.file)}:${t.line}</span></header>
         ${txOnly ? `<div class="chips">${txOnly}</div>` : ''}
+        ${t.skip ? `<div class="muted">Skipped: ${esc(t.skip)}</div>` : ''}
         ${t.errors.length ? `<pre class="err">${esc(t.errors.join('\n\n')).slice(0, 6000)}</pre>` : ''}
         ${shots ? `<div class="shots">${shots}</div>` : ''}
       </article>`;
@@ -138,8 +140,20 @@ document.querySelector('.bar input').oninput=e=>{q=e.target.value.toLowerCase();
       for (const t of failedTests.slice(0, 30)) md.push(`- \`${t.file}:${t.line}\` ${t.title}: ${(t.errors[0] || '').split('\n')[0].slice(0, 200)}`);
       md.push('');
     }
+    const skipped = this.tests.filter((t) => t.status === 'skipped');
+    if (skipped.length) {
+      md.push(`**Skipped**`, '');
+      for (const t of skipped.slice(0, 30)) md.push(`- \`${t.file}:${t.line}\` ${t.title}${t.skip ? `: ${t.skip}` : ''}`);
+      md.push('');
+    }
     md.push('The report with every device picture is in the run artifacts.');
     fs.writeFileSync(path.join(this.out, 'summary.md'), md.join('\n') + '\n');
+    // Playwright's list reporter does not say why a test was skipped
+    if (skipped.length) {
+      console.log(`\n  ${skipped.length} skipped:`);
+      for (const t of skipped.slice(0, 50)) console.log(`    ${t.file}:${t.line} ${t.title}${t.skip ? `: ${t.skip}` : ''}`);
+      if (skipped.length > 50) console.log(`    ... and ${skipped.length - 50} more`);
+    }
   }
 
   printsToStdio() { return false; }

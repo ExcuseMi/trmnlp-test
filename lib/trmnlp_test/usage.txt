@@ -1,9 +1,10 @@
-Usage: trmnlp-test [options] [command] [args]
+Usage: trmnlp-test [command] [args] [options] [-- spec args]
 
 Tests TRMNL plugins in the trmnlp format, in Docker.
 
 Commands:
-  run [playwright args]   run the tests (default), e.g. -g "dark", --update-snapshots, -j 4
+  run [playwright args]   run the tests (default), e.g. -g "dark", --update-snapshots, -j 4;
+                          a spec file or filter in first place runs those: trmnlp-test views.spec
   init                    create trmnlp-test.config.js and test/trmnl/plugin.spec.js
   models                  list the TRMNL device models and their palettes
   versions                list the TRMNL framework versions
@@ -18,6 +19,9 @@ Options:
   --mount DIR             also mount DIR into the container (repeatable)
   --root DIR              the directory with trmnlp-test.config.js, inside the repository
   --report DIR            where the report goes (default: config "report")
+  --env NAME[=VALUE]      pass an environment variable to the specs (repeatable);
+                          TRMNLP_TEST_* variables always pass
+  -- ARGS                 everything after -- reaches the specs as require('trmnlp-test').args
   -h, --help              show this help
   -v, --version           show versions
 

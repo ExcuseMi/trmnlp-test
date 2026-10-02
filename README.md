@@ -23,6 +23,8 @@ trmnlp-test init               # trmnlp-test.config.js + test/trmnl/plugin.spec.
 trmnlp-test                    # run; Playwright args pass through (-g, --update-snapshots)
 trmnlp-test models | versions  # device models / framework versions
 trmnlp-test update             # pull the image now (otherwise at most once a day)
+trmnlp-test views.spec        # only some tests (a file or a filter); Playwright args pass through
+trmnlp-test run -- --rebaseline  # args after -- reach the specs: require('trmnlp-test').args
 trmnlp-test help | --version   # all commands and options / versions of trmnlp-test, trmnlp, Playwright
 ```
 
@@ -88,6 +90,7 @@ test('menu', async ({ trmnl }) => {
   await expect(screen).toHaveQr('BCD\n002...');             // black on white; { inverted: true | 'any' } for dark codes
   await expect(screen).toMatchScreen();                     // PNG snapshot (--update-snapshots)
   await expect(screen).toFitDeviceImageLimit();
+  await expect(screen).toMatchReference('refs/photo.png', { selector: '.dial', refRect, minIoU: 0.93 });  // diff attached
   const png = await screen.png();                           // pixel(x,y), colors(), inkRatio(rect), inkBounds(), crop()
 });
 

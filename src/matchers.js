@@ -1,7 +1,8 @@
 'use strict';
 // expect(screen).toXxx() matchers. Failure messages carry the evidence, so a red
 // run is debuggable from the report alone.
-const { expect: baseExpect } = require('@playwright/test');
+const path = require('path');
+const { expect: baseExpect, test: baseTest } = require('@playwright/test');
 const { Screen, TransformResult } = require('./screen');
 const { Png } = require('./png');
 
@@ -65,6 +66,19 @@ const matchers = {
     } catch (e) {
       return result(false, e.message);
     }
+  },
+
+  // part of the device picture matches a reference image to at least minIoU (section 9 of the
+  // spec); the diff and the resized reference are attached to the test
+  async toMatchReference(screen, reference, { minIoU = 0.9, ...opts } = {}) {
+    const info = baseTest.info();
+    const file = typeof reference === 'string' && !path.isAbsolute(reference) ? path.resolve(path.dirname(info.file), reference) : reference;
+    const r = await screen.compareReference(file, opts);
+    const name = typeof reference === 'string' ? path.basename(reference) : 'reference';
+    await info.attach(`${screen.label}: ${name} diff (gray both, red render only, blue reference only)`, { body: r.diff.buffer, contentType: 'image/png' });
+    await info.attach(`${screen.label}: ${name} resized`, { body: r.reference.buffer, contentType: 'image/png' });
+    const score = Math.round(r.iou * 1000) / 1000;
+    return result(r.iou >= minIoU, `${screen.label}: IoU ${score} against ${name}${opts.selector ? ` (${opts.selector})` : ''}, ${this.isNot ? 'expected below' : 'minimum'} ${minIoU}`);
   },
 
   async toFitDeviceImageLimit(screen) {
