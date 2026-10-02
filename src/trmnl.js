@@ -78,7 +78,7 @@ class Trmnl {
     if ('server' in o) throw new Error("the server option is gone: the server's qr_code is the default (qr: 'trmnlp' for trmnlp's), and crlf: true renders CR LF newlines");
     const info = await this.info();
     const device = await this.device(o, info);
-    const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes', this.config.darkMode);
+    const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes');
     const noBleed = o.noScreenPadding ?? info.settings.no_screen_padding === 'yes';
     const now = toSeconds(o.now);
     const trmnl = mergeDeep({
@@ -111,17 +111,10 @@ class Trmnl {
     const view = opts.view || (this.config.defaults && this.config.defaults.view) || 'full';
     const { run, o, info, device, darkMode, noBleed, now } = await this.run(opts, [view]);
     const framework = FRAMEWORK.resolve(o.framework || info.framework.setting || 'latest');
-    // dark mode: before v3 the framework class inverts the screen and spares `.image` elements.
-    // From v3 the class only remaps framework colours and leaves inline SVG and hard-coded colours
-    // alone, while TRMNL's server preview still inverted an inline svg, so 'invert' (the default)
-    // applies the v2 rule instead.
-    const v3 = FRAMEWORK.compare(framework, '3.0.0') >= 0;
-    const darkClass = !!darkMode && (!v3 || darkMode === 'framework');
-    const invert = !!darkMode && v3 && darkMode === 'invert';
-    const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode: darkClass, noBleed,
+    const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode, noBleed,
       theme: o.theme, scale: o.scale, textScale: o.textScale, fonts: o.fonts, extra: o.screenClasses });
     const rendered = run.views[view];
-    const html = buildPage({ markup: rendered.markup, view, framework, classes, model: device.model, slot: o.slot || 0, invert, theme: o.theme, head: o.head });
+    const html = buildPage({ markup: rendered.markup, view, framework, classes, slot: o.slot || 0, theme: o.theme, head: o.head });
 
     const page = await this.browser.newPage({ viewport: { width: device.width, height: device.height }, deviceScaleFactor: 1 });
     const pageErrors = [], consoleErrors = [], browserRequests = [], missingAssets = [];
@@ -133,10 +126,17 @@ class Trmnl {
     await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
     const settle = o.settleMs ?? 100;
     if (settle) await page.waitForTimeout(settle);
+    // TRMNL keeps --pixel-ratio at 1 while the page lays out and applies the panel's ratio at
+    // capture (the framework then scales the screen to the device's pixels): do the same
+    const ratio = (device.model.css && Object.fromEntries(device.model.css.variables)['--pixel-ratio']) || '1';
+    await page.evaluate((r) => new Promise((done) => {
+      document.querySelector('.screen').style.setProperty('--pixel-ratio', r);
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    }), ratio);
     const screenBox = await page.locator('.screen').first().boundingBox();
 
     const label = [device.model.name + (device.orientation === 'portrait' ? ' portrait' : ''), view,
-      device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && (darkMode === 'framework' ? 'dark (framework)' : 'dark'),
+      device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && 'dark',
       o.theme && `theme ${o.theme}`, o.scale && `scale ${o.scale}`, o.textScale && `text ${o.textScale}`,
       o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.qr && o.qr !== 'server' && `qr ${o.qr}`, o.crlf && 'crlf', o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
@@ -232,11 +232,10 @@ class Trmnl {
   }
 }
 
-function darkModeOf(value, configured) {
-  if (!value || value === 'no') return false;
-  const mode = value === true || value === 'yes' ? configured || 'invert' : value;
-  if (!['invert', 'framework'].includes(mode)) throw new Error(`darkMode must be true, false, 'invert' or 'framework' (got ${JSON.stringify(value)})`);
-  return mode;
+// dark mode is the plugin's dark_mode setting: TRMNL adds classes, the framework does the rest
+function darkModeOf(value) {
+  if (value === 'invert' || value === 'framework') throw new Error(`darkMode is true or false now (got ${JSON.stringify(value)}): dark mode is the framework's classes, as on TRMNL`);
+  return !!value && value !== 'no';
 }
 
 // qr_code as TRMNL's server returns it (default), as trmnlp does, or without a viewBox (not seen)

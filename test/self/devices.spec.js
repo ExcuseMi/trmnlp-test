@@ -5,7 +5,9 @@ const data = { sensor: { temperature: 19, readings: [1, 2, 3] } };
 for (const s of matrix({ device: DEVICES.representative, view: ['full', 'quadrant'] })) {
   test(`renders on ${s.label}`, async ({ trmnl }) => {
     const screen = await trmnl.render({ ...s, webhook: data });
-    expect(screen).toRenderCleanly();
+    // TRMNL's own data disagrees here: the models API says 800x600 at 1.28 (1024x768), framework
+    // 3.4's device class 800x592, so the screen ends ~10 px above the panel's bottom
+    expect(screen).toRenderCleanly({ allow: s.device === 'amazon_kindle_paperwhite_6th_gen' ? ['the screen is 1024x758'] : [] });
     await expect(screen).toHaveNoOverflow();
     const png = await screen.png();
     expect(png.width).toBe(screen.device.width);
@@ -20,7 +22,7 @@ for (const s of matrix({ darkMode: [false, true], theme: [undefined, 'black-and-
   test(`settings: ${s.label}`, async ({ trmnl }) => {
     const screen = await trmnl.render({ ...s, device: 'v2', webhook: data });
     expect(screen.classes).toContain('screen--v2');
-    if (s.darkMode) expect(screen.html).toContain('filter:invert(1)');
+    if (s.darkMode) expect(screen.classes.split(' ')).toEqual(expect.arrayContaining(['screen--dark-mode', 'dark-mode']));
     if (s.theme) expect(screen.classes).toContain(`screen--theme-${s.theme}`);
     expect(screen).toRenderCleanly();
   });
@@ -29,7 +31,7 @@ for (const s of matrix({ darkMode: [false, true], theme: [undefined, 'black-and-
 for (const framework of FRAMEWORK.majors().filter((v) => FRAMEWORK.compare(v, '1.0.0') >= 0)) {
   test(`framework ${framework}`, async ({ trmnl }) => {
     const screen = await trmnl.render({ framework, webhook: data });
-    expect(screen.html).toContain(`/css/${framework}/plugins.css`);
+    expect(screen.html).toContain(`/css/${framework}/plugins.min.css`);
     expect(screen).toRenderCleanly();
     await expect(screen).not.toBeBlank();
   });

@@ -71,7 +71,7 @@ const { test, expect, matrix, VIEWS, DEVICES, FRAMEWORK } = require('trmnlp-test
 test('menu', async ({ trmnl }) => {
   const screen = await trmnl.render({
     device: 'og_plus', view: 'full',          // any model, orientation: 'portrait', palette, theme, scale, textScale, fonts, framework
-    darkMode: true,                           // the screen inverted, `.image` elements kept ('framework': the v3 class only)
+    darkMode: true,                           // TRMNL's dark-mode classes (screen--dark-mode, dark-mode)
     qr: 'server',                             // qr_code as TRMNL's server returns it (default); 'trmnlp', 'fixed'
     crlf: true,                               // the template with CR LF newlines (e.g. pasted markup)
     fields: { data_source: 'webhook' },       // custom field values (defaults + .trmnlp.yml + these)

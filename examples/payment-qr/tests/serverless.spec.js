@@ -98,12 +98,11 @@ test("the server's qr_code svg breaks this version's image", async ({ trmnl }) =
   await expect(screen).toHaveQr(null);
 });
 
-// dark mode inverts everything but `.image` elements; this version's <img> has no `image` class,
-// so its code comes out white on black (still a valid code)
-test('dark mode inverts the QR', async ({ trmnl }) => {
+// framework 3.4 dark mode remaps the framework's colours; the <img> keeps its black-on-white code
+test('dark mode keeps the QR scannable', async ({ trmnl }) => {
   const { trmnl: ns, ...stored } = northbean;
   const screen = await serverless(trmnl).render({ data: stored, transform: false, darkMode: true });
-  await expect(screen).toHaveQr(EPC, { inverted: true });
+  await expect(screen).toHaveQr(EPC);
 });
 
 test('device picture', async ({ trmnl }) => {

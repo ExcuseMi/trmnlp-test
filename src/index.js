@@ -46,7 +46,6 @@ function matrix(axes) {
 function describe(c) {
   return Object.entries(c).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => {
     if (v === true) return k === 'darkMode' ? 'dark' : k;
-    if (k === 'darkMode' && typeof v === 'string') return v === 'framework' ? 'dark (framework)' : 'dark';
     if (v === false) return k === 'darkMode' ? 'light' : `no ${k}`;
     if (v && typeof v === 'object') return v.label || v.name || JSON.stringify(v);
     if (k === 'qr') return `qr ${v}`;

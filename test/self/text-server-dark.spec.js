@@ -36,6 +36,9 @@ test.describe('qr_code and line endings as TRMNL makes them', () => {
     const screen = await trmnl.plugin('../fixtures/quirks').render({ crlf: true });
     await expect(screen.locator('[data-count]')).toHaveText('1');
   });
+  test("darkMode 'invert' and 'framework' are refused with an explanation", async ({ trmnl }) => {
+    await expect(trmnl.plugin('../fixtures/quirks').render({ darkMode: 'invert' })).rejects.toThrow(/true or false now/);
+  });
   test('the old server option and unknown qr modes are refused', async ({ trmnl }) => {
     await expect(trmnl.plugin('../fixtures/quirks').render({ server: true })).rejects.toThrow(/server option is gone/);
     await expect(trmnl.plugin('../fixtures/quirks').render({ qr: 'nope' })).rejects.toThrow(/qr must be one of/);
@@ -56,17 +59,13 @@ test.describe('dark mode', () => {
     return { s, bg: png.pixel(5, 5).gray, svgMargin: await at('[data-svg]', 4), svgSquare: await at('[data-svg]', 60), imgMargin: await at('[data-img]', 4), imgSquare: await at('[data-img]', 60),
       classMargin: await at('[data-img-class]', 4), svgClassMargin: await at('[data-svg-class]', 4) };
   }
-  // the v2 rule: everything inverted, `.image` elements (img or svg) kept, a plain <img> inverted too
-  test('true: the screen inverted, .image elements kept', async ({ trmnl }) => {
+  // TRMNL adds screen--dark-mode and dark-mode; on 3.x the framework remaps its colours and leaves
+  // an inline svg or an <img> as drawn
+  test('framework 3: the classes, a black screen, inline svg and images as drawn', async ({ trmnl }) => {
     const p = await probe(trmnl, { darkMode: true });
-    expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255, svgClassMargin: 255 });
-    expect(p.s.classes).not.toContain('screen--dark-mode');
+    expect(p).toMatchObject({ bg: 0, svgMargin: 255, svgSquare: 0, imgMargin: 255, imgSquare: 0, classMargin: 255, svgClassMargin: 255 });
+    expect(p.s.classes.split(' ')).toEqual(expect.arrayContaining(['screen--dark-mode', 'dark-mode']));
     expect(p.s.data.trmnl.plugin_settings.dark_mode).toBe('yes');
-  });
-  test("'framework': only the class, inline svg keeps its colours", async ({ trmnl }) => {
-    const p = await probe(trmnl, { darkMode: 'framework' });
-    expect(p).toMatchObject({ bg: 0, svgMargin: 255, svgSquare: 0, imgMargin: 255, imgSquare: 0, svgClassMargin: 255 });
-    expect(p.s.classes).toContain('screen--dark-mode');
   });
   // framework 2 does it with its own class, and spares only images with the framework's `image` class
   test('framework 2: the class inverts, except .image elements', async ({ trmnl }) => {
@@ -77,13 +76,14 @@ test.describe('dark mode', () => {
 
 test.describe('QR polarity', () => {
   // the fixture's inline svg and <img> both hold a black-on-white code once qr_code draws one
-  test('a code inverted by dark mode is found, reported, and refused unless asked for', async ({ trmnl }) => {
+  test('a code inverted by dark mode (framework 2) is found, reported, and refused unless asked for', async ({ trmnl }) => {
     const plugin = trmnl.plugin('../fixtures/quirks');
     const light = await plugin.render();
     expect(await light.qrInfo()).toEqual({ text: 'hello', inverted: false });
     await expect(light).toHaveQr('hello');
 
-    const dark = await plugin.render({ darkMode: true });
+    // framework 2 inverts the screen in dark mode, an inline svg without the image class with it
+    const dark = await plugin.render({ darkMode: true, framework: '2.0.1' });
     expect(await dark.qrInfo()).toEqual({ text: 'hello', inverted: true });
     await expect(dark).not.toHaveQr('hello');
     await expect(dark).toHaveQr('hello', { inverted: true });

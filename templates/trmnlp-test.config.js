@@ -25,7 +25,6 @@ module.exports = {
   },
 
   // qr: 'server',      // qr_code as TRMNL's server returns it (default), or 'trmnlp' / 'fixed'
-  // darkMode: 'invert', // what darkMode: true renders: 'invert' (as the server) or 'framework' (the v3 class only)
 
   screenshots: 'always', // device pictures in the report: always | on-failure | never
 
