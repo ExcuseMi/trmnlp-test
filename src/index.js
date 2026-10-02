@@ -3,7 +3,7 @@
 const path = require('path');
 const base = require('@playwright/test');
 const { Harness } = require('./harness');
-const { Trmnl } = require('./trmnl');
+const { Trmnl, QR_MODES } = require('./trmnl');
 const { matchers } = require('./matchers');
 const models = require('./models');
 const { FRAMEWORK } = require('./framework');
@@ -47,19 +47,12 @@ function describe(c) {
   return Object.entries(c).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => {
     if (v === true) return k === 'darkMode' ? 'dark' : k;
     if (k === 'darkMode' && typeof v === 'string') return v === 'framework' ? 'dark (framework)' : 'dark';
-    if (v === false && k === 'server') return 'trmnlp';
     if (v === false) return k === 'darkMode' ? 'light' : `no ${k}`;
-    if (k === 'server' && v && typeof v === 'object') return 'server ' + Object.entries(v).map(([a, b]) => (b === true ? a : `${a} ${b}`)).join(', ');
     if (v && typeof v === 'object') return v.label || v.name || JSON.stringify(v);
+    if (k === 'qr') return `qr ${v}`;
     return k === 'framework' ? `v${v}` : String(v);
   }).join(' · ');
 }
-
-// TRMNL next to trmnlp: matrix({ server: SERVER.variants }) renders each difference on its own
-const SERVER = {
-  all: true,
-  variants: [false, { qr: 'server' }, { qr: 'fixed' }, { crlf: true }],
-};
 
 const DEVICES = {
   get all() { return models.groups.all(); },
@@ -71,6 +64,6 @@ const DEVICES = {
 };
 
 module.exports = {
-  test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, SCALES, TEXT_SCALES, THEMES, SERVER,
+  test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, SCALES, TEXT_SCALES, THEMES, QR_MODES,
   MODELS: models.MODELS, PALETTES: models.PALETTES, config,
 };

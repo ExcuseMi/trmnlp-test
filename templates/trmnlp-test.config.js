@@ -24,6 +24,9 @@ module.exports = {
     timeoutMs: 5000, // the hosted limit
   },
 
+  // qr: 'server',      // qr_code as TRMNL's server returns it (default), or 'trmnlp' / 'fixed'
+  // darkMode: 'invert', // what darkMode: true renders: 'invert' (as the server) or 'framework' (the v3 class only)
+
   screenshots: 'always', // device pictures in the report: always | on-failure | never
 
   // parallel test workers (each runs its own harness and browser): a number or '50%' of the CPUs.

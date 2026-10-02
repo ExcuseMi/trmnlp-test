@@ -90,6 +90,14 @@ for (const s of matrix({ device: ['og_plus', 'og_png', 'v2', 'amazon_kindle_2024
   });
 }
 
+// what happened on the device: the server's svg already has width/height, the template added its own,
+// and the duplicate attributes made the svg invalid XML inside the <img>
+test("the server's qr_code svg breaks this version's image", async ({ trmnl }) => {
+  const { trmnl: ns, ...stored } = northbean;
+  const screen = await serverless(trmnl).render({ data: stored, transform: false, qr: 'server' });
+  await expect(screen).toHaveQr(null);
+});
+
 test('dark mode keeps the QR scannable', async ({ trmnl }) => {
   const { trmnl: ns, ...stored } = northbean;
   const screen = await serverless(trmnl).render({ data: stored, transform: false, darkMode: true });

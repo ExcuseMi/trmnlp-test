@@ -75,6 +75,7 @@ class Trmnl {
 
   async run(opts, views) {
     const o = this.options(opts);
+    if ('server' in o) throw new Error("the server option is gone: the server's qr_code is the default (qr: 'trmnlp' for trmnlp's), and crlf: true renders the web editor's CR LF");
     const info = await this.info();
     const device = await this.device(o, info);
     const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes', this.config.darkMode);
@@ -89,7 +90,7 @@ class Trmnl {
       plugin: this.dir, fields: o.fields, strategy: o.strategy, now, state: o.state, trmnl, device: trmnl.device,
       transform: o.transform, mocks: normaliseMocks(o.mocks), network: o.network || o.serverless.network || 'mock',
       timeoutMs: o.timeoutMs || o.serverless.timeoutMs || 5000, freezeTime: o.freezeTime, strictVariables: o.strictVariables,
-      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, server: serverQuirks(o.server),
+      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, qr: qrMode(o.qr ?? this.config.qr), crlf: !!o.crlf,
     };
     if (o.data !== undefined) req.data = o.data;
     if (o.webhook !== undefined) req.webhook = applyAll(o.webhookStore || {}, o.webhook, { limit: o.webhookLimit || 'standard' });
@@ -136,7 +137,7 @@ class Trmnl {
     const label = [device.model.name + (device.orientation === 'portrait' ? ' portrait' : ''), view,
       device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && (darkMode === 'framework' ? 'dark (framework)' : 'dark'),
       o.theme && `theme ${o.theme}`, o.scale && `scale ${o.scale}`, o.textScale && `text ${o.textScale}`,
-      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.server && `server ${o.server === true ? 'all' : Object.entries(o.server).map(([k, v]) => (v === true ? k : `${k} ${v}`)).join(', ')}`, o.note].filter(Boolean).join(' · ');
+      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.qr && o.qr !== 'server' && `qr ${o.qr}`, o.crlf && 'crlf', o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
       page, html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
       data: run.data, mergeVariables: run.mergeVariables, customFields: run.customFields, transform: new TransformResult(run),
@@ -237,14 +238,12 @@ function darkModeOf(value, configured) {
   return mode;
 }
 
-// render({ server: true }) applies every known difference of TRMNL's server; an object picks some
-const SERVER_ALL = { qr: 'server', crlf: true };
-function serverQuirks(server) {
-  if (!server) return {};
-  if (server === true) return SERVER_ALL;
-  const unknown = Object.keys(server).filter((k) => !(k in SERVER_ALL));
-  if (unknown.length) throw new Error(`unknown server quirk(s) ${unknown.join(', ')}: known are qr ('server' | 'fixed') and crlf`);
-  return server;
+// qr_code as TRMNL's server returns it (default), as trmnlp does, or without a viewBox (not seen)
+const QR_MODES = ['server', 'trmnlp', 'fixed'];
+function qrMode(qr) {
+  if (qr === undefined) return 'server';
+  if (!QR_MODES.includes(qr)) throw new Error(`qr must be one of ${QR_MODES.join(', ')} (got ${JSON.stringify(qr)})`);
+  return qr;
 }
 
 function pick(t) {
@@ -258,4 +257,4 @@ function mergeDeep(a, b) {
   return out;
 }
 
-module.exports = { Trmnl, toSeconds, normaliseMocks, SERVER_ALL };
+module.exports = { Trmnl, toSeconds, normaliseMocks, QR_MODES };

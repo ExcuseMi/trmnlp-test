@@ -1,4 +1,4 @@
-const { test, expect, matrix, SERVER } = require('trmnlp-test');
+const { test, expect, matrix, QR_MODES } = require('trmnlp-test');
 
 test.describe('toShowText sees what is cut off', () => {
   test('visible text passes', async ({ trmnl }) => {
@@ -16,33 +16,32 @@ test.describe('toShowText sees what is cut off', () => {
   }
 });
 
-test.describe('server quirks', () => {
-  test('trmnlp: a scalable svg, template newlines split', async ({ trmnl }) => {
+test.describe('qr_code and line endings as TRMNL makes them', () => {
+  test("default: the server's svg, viewBox plus natural size and max-width, whatever the view argument", async ({ trmnl }) => {
     const screen = await trmnl.plugin('../fixtures/quirks').render();
+    expect(screen.markup).toMatch(/<svg width="(\d+)" height="\1" style="max-width:100%;height:auto" [^>]*viewBox="0 0 \1 \1"/);
     await expect(screen.locator('[data-count]')).toHaveText('3');
+  });
+  test("qr: 'trmnlp': a scalable svg with only the viewBox", async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ qr: 'trmnlp' });
     expect(screen.markup).toMatch(/<svg[^>]*viewBox/);
     expect(screen.markup).not.toMatch(/<svg[^>]*\swidth=/);
   });
-  test('qr fixed (not seen, for robustness): width and height, no viewBox', async ({ trmnl }) => {
-    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { qr: 'fixed' } });
+  test("qr: 'fixed' (not seen, for robustness): width and height, no viewBox", async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ qr: 'fixed' });
     expect(screen.markup).toMatch(/<svg[^>]*\swidth=/);
     expect(screen.markup).not.toMatch(/<svg[^>]*viewBox/);
   });
-  test("qr server: viewBox, natural size and max-width, also without \"responsive\"", async ({ trmnl }) => {
-    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { qr: 'server' } });
-    expect(screen.markup).toMatch(/<svg width="(\d+)" height="\1" style="max-width:100%;height:auto" [^>]*viewBox="0 0 \1 \1"/);
-  });
-  test('crlf: a newline typed in the template no longer splits the data', async ({ trmnl }) => {
-    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: { crlf: true } });
+  test("crlf: the web editor's CR LF, a newline typed in the template no longer splits the data", async ({ trmnl }) => {
+    const screen = await trmnl.plugin('../fixtures/quirks').render({ crlf: true });
     await expect(screen.locator('[data-count]')).toHaveText('1');
   });
-  test('server: true applies all, unknown quirks are refused', async ({ trmnl }) => {
-    const screen = await trmnl.plugin('../fixtures/quirks').render({ server: true });
-    await expect(screen.locator('[data-count]')).toHaveText('1');
-    await expect(trmnl.plugin('../fixtures/quirks').render({ server: { nope: 1 } })).rejects.toThrow(/unknown server quirk/);
+  test('the old server option and unknown qr modes are refused', async ({ trmnl }) => {
+    await expect(trmnl.plugin('../fixtures/quirks').render({ server: true })).rejects.toThrow(/server option is gone/);
+    await expect(trmnl.plugin('../fixtures/quirks').render({ qr: 'nope' })).rejects.toThrow(/qr must be one of/);
   });
-  for (const s of matrix({ server: SERVER.variants })) {
-    test(`variants render · ${s.label}`, async ({ trmnl }) => {
+  for (const s of matrix({ qr: QR_MODES, crlf: [false, true] })) {
+    test(`renders · ${s.label}`, async ({ trmnl }) => {
       expect(await trmnl.plugin('../fixtures/quirks').render(s)).toRenderCleanly();
     });
   }

@@ -20,7 +20,7 @@ Sources are the `.puml` files; regenerate the PNGs with
 2. **Transform:** the plugin's `transform.*` runs in trmnlp's wrapper as a subprocess. It has a fixed clock (libfaketime), a 5 s timeout and the dependency paths. Its HTTP(S) goes through a per-run mock proxy, which records every request. Its output replaces the data, and `trmnl_state` becomes the next `trmnl.state`.
 3. **Liquid:** `shared.liquid` + `<view>.liquid` are rendered with trmnlp's Liquid environment, with `Time.now` frozen.
 4. **Page:** the hosted page markup is rebuilt with the screen classes from the model, palette and settings, the model's CSS variables, the mashup slot, the framework version and the theme. Assets and fonts come from the cache, and `Date` is fixed. Dark mode inverts the whole screen except images, as the server does (`'framework'`: the v3 class only).
-6. **Server quirks** (`server: ...`): the server's `qr_code` SVG (viewBox plus natural size and a max-width style, whatever the view argument), and the web editor's CRLF line endings. They are applied in the harness, so a test renders what TRMNL's server would.
+6. **Where TRMNL differs:** `qr_code` returns the server's SVG by default (viewBox plus natural size and a max-width style, whatever the view argument); `crlf: true` renders the web editor's CR LF newlines. They are applied in the harness, so a test renders what TRMNL's server would.
 5. **Assertions:** locators and geometry on the live page. `png()` is the screenshot reduced to the device palette (Floyd-Steinberg), used for pixels, QR codes (zbar), snapshots and the image size limit.
 
 ## Over time
