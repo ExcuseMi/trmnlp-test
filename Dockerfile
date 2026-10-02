@@ -1,6 +1,6 @@
 # trmnlp-test: trmnlp (Liquid, transform harness) + Chromium (Playwright) + the four
 # serverless runtimes with package managers, libfaketime and zbar.
-ARG TRMNLP_VERSION=0.13.1
+ARG TRMNLP_VERSION=0.14.2
 FROM node:24-trixie-slim AS node
 FROM trmnl/trmnlp:v${TRMNLP_VERSION}
 LABEL org.opencontainers.image.source=https://github.com/ExcuseMi/trmnlp-test \

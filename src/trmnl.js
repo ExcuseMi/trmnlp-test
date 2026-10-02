@@ -4,7 +4,7 @@ const path = require('path');
 const { model: findModel, palette: findPalette } = require('./models');
 const { FRAMEWORK } = require('./framework');
 const { buildPage, screenClasses } = require('./page');
-const { attachRoutes, PAGE_URL } = require('./assets');
+const { Host } = require('./host');
 const { applyAll, apply, WebhookError } = require('./webhook');
 const { Screen, TransformResult } = require('./screen');
 
@@ -90,7 +90,7 @@ class Trmnl {
       plugin: this.dir, fields: o.fields, strategy: o.strategy, now, state: o.state, trmnl, device: trmnl.device,
       transform: o.transform, mocks: normaliseMocks(o.mocks), network: o.network || o.serverless.network || 'mock',
       timeoutMs: o.timeoutMs || o.serverless.timeoutMs || 5000, freezeTime: o.freezeTime, strictVariables: o.strictVariables,
-      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, qr: qrMode(o.qr ?? this.config.qr), crlf: !!o.crlf,
+      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, cacheTransform: o.cacheTransform, qr: qrMode(o.qr ?? this.config.qr), crlf: !!o.crlf,
     };
     if (o.data !== undefined) req.data = o.data;
     if (o.webhook !== undefined) req.webhook = applyAll(o.webhookStore || {}, o.webhook, { limit: o.webhookLimit || 'standard' });
@@ -116,34 +116,65 @@ class Trmnl {
     const rendered = run.views[view];
     const html = buildPage({ markup: rendered.markup, view, framework, classes, slot: o.slot || 0, theme: o.theme, head: o.head });
 
-    const page = await this.browser.newPage({ viewport: { width: device.width, height: device.height }, deviceScaleFactor: 1 });
-    const pageErrors = [], consoleErrors = [], browserRequests = [], missingAssets = [];
-    page.on('pageerror', (e) => pageErrors.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) consoleErrors.push(m.text()); });
-    await page.clock.setFixedTime(now * 1000);
-    await attachRoutes(page, { html, mocks: normaliseMocks(o.mocks), requests: browserRequests, offline: o.offline, missing: missingAssets });
-    await page.goto(PAGE_URL, { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
-    const settle = o.settleMs ?? 100;
-    if (settle) await page.waitForTimeout(settle);
-    // TRMNL keeps --pixel-ratio at 1 while the page lays out and applies the panel's ratio at
-    // capture (the framework then scales the screen to the device's pixels): do the same
-    const ratio = (device.model.css && Object.fromEntries(device.model.css.variables)['--pixel-ratio']) || '1';
-    await page.evaluate((r) => new Promise((done) => {
-      document.querySelector('.screen').style.setProperty('--pixel-ratio', r);
-      requestAnimationFrame(() => requestAnimationFrame(done));
-    }), ratio);
-    const screenBox = await page.locator('.screen').first().boundingBox();
-
+    const shown = await this.openPage(html, { device, now, o });
     const label = [device.model.name + (device.orientation === 'portrait' ? ' portrait' : ''), view,
       device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && 'dark',
       o.theme && `theme ${o.theme}`, o.scale && `scale ${o.scale}`, o.textScale && `text ${o.textScale}`,
       o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.qr && o.qr !== 'server' && `qr ${o.qr}`, o.crlf && 'crlf', o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
-      page, html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
+      html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
       data: run.data, mergeVariables: run.mergeVariables, customFields: run.customFields, transform: new TransformResult(run),
-      state: run.nextState, polling: run.polling, pageErrors, consoleErrors, browserRequests, missingAssets,
-      device, view, framework, classes, darkMode, label, options: o, now, screenBox,
+      state: run.nextState, polling: run.polling, ...shown,
+      device, view, framework, classes, darkMode, label, options: o, now,
+    });
+    this.screens.push(screen);
+    return screen;
+  }
+
+  // Loads the page in an iframe of the worker's host page and waits for it as TRMNL's renderer does.
+  async openPage(html, { device, now, o }) {
+    const host = await Host.get(this.browser, o.deviceScale || 1);
+    const ctx = { mocks: normaliseMocks(o.mocks), requests: [], offline: o.offline, missing: [], pageErrors: [], consoleErrors: [], missingAssets: [] };
+    ctx.missing = ctx.missingAssets;
+    const { frame, iframe, pageId } = await host.open(html, { width: device.width, height: device.height, now, ctx });
+    await frame.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
+    const settle = o.settleMs ?? 100;
+    if (settle) await frame.waitForTimeout(settle);
+    // TRMNL keeps --pixel-ratio at 1 while the page lays out and applies the panel's ratio at
+    // capture (the framework then scales the screen to the device's pixels): do the same
+    const ratio = (device.model.css && Object.fromEntries(device.model.css.variables)['--pixel-ratio']) || '1';
+    if (!o.bare) {
+      await frame.evaluate((r) => new Promise((done) => {
+        const screen = document.querySelector('.screen');
+        if (screen) screen.style.setProperty('--pixel-ratio', r);
+        requestAnimationFrame(() => requestAnimationFrame(done));
+      }), ratio);
+    }
+    const screenBox = await frame.locator('.screen').first().boundingBox();
+    return { page: frame, host, iframe, pageId, ctx, pageErrors: ctx.pageErrors, consoleErrors: ctx.consoleErrors,
+      browserRequests: ctx.requests, missingAssets: ctx.missingAssets, screenBox };
+  }
+
+  // Renders markup as given: no Liquid, data or transform. For a piece of a plugin (an svg, a
+  // component) on a device, at a chosen deviceScale; bare: true leaves the framework out
+  // (fast, for checks that need no framework CSS).
+  async renderMarkup(markup, opts = {}) {
+    const o = this.options(opts);
+    const view = o.view || 'full';
+    let setting = 'latest';
+    try { setting = (await this.info()).framework.setting || 'latest'; } catch { /* no plugin directory */ }
+    const framework = FRAMEWORK.resolve(o.framework || setting);
+    const device = await this.device(o, { settings: {} });
+    const darkMode = darkModeOf(o.darkMode);
+    const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode,
+      noBleed: o.noScreenPadding, theme: o.theme, scale: o.scale, textScale: o.textScale, fonts: o.fonts, extra: o.screenClasses });
+    const html = buildPage({ markup, view, framework, classes, slot: o.slot || 0, theme: o.theme, head: o.head, bare: o.bare });
+    const now = toSeconds(o.now);
+    const shown = await this.openPage(html, { device, now, o });
+    const label = [device.model.name, view, 'markup', o.bare && 'bare', o.deviceScale && `x${o.deviceScale}`, o.note].filter(Boolean).join(' · ');
+    const screen = new Screen({
+      html, markup, liquidError: null, liquidWarnings: [], data: {}, transform: new TransformResult({}), ...shown,
+      device, view, framework, classes, darkMode, label, options: o, now, testTitle: this.testInfo.title,
     });
     this.screens.push(screen);
     return screen;
@@ -225,7 +256,7 @@ class Trmnl {
       }
       summary.push({ label: s.label, model: s.device.model.name, view: s.view, framework: s.framework, classes: s.classes,
         transform: pick(s.transform), problems: s.problems(), requests: s.requests.length });
-      await s.page.close().catch(() => {});
+      await s.host.remove(s);
     }
     for (const t of this.transforms) summary.push({ label: 'transform', transform: pick(t) });
     if (summary.length) await this.testInfo.attach('trmnl.json', { body: JSON.stringify(summary, null, 2), contentType: 'application/json' });

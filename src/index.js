@@ -9,6 +9,7 @@ const models = require('./models');
 const { FRAMEWORK } = require('./framework');
 const { VIEWS, SCALES, TEXT_SCALES, THEMES } = require('./page');
 const { loadConfig } = require('./config');
+const { Png, quantize } = require('./png');
 
 const config = loadConfig();
 
@@ -64,5 +65,5 @@ const DEVICES = {
 
 module.exports = {
   test, expect, matrix, DEVICES, VIEWS, FRAMEWORK, SCALES, TEXT_SCALES, THEMES, QR_MODES,
-  MODELS: models.MODELS, PALETTES: models.PALETTES, config,
+  MODELS: models.MODELS, PALETTES: models.PALETTES, config, Png, quantize,
 };

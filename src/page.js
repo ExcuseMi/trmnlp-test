@@ -42,7 +42,7 @@ function escapeAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '
 // The page as TRMNL's preview writes it: the framework's release files (plugins.min.css, the JS
 // imported as a module), every theme stylesheet from 3.2 on (a theme is then just its class), and
 // the screen inside a "trmnl environment" wrapper with an empty style.
-function buildPage({ markup, view, framework, classes, slot = 0, theme, head = '' }) {
+function buildPage({ markup, view, framework, classes, slot = 0, theme, head = '', bare = false }) {
   oneOf('view', view, VIEWS);
   if (theme && FRAMEWORK.compare(framework, '3.2.0') < 0) throw new Error(`themes need framework 3.2.0 or later (got ${framework})`);
   const mashup = MASHUPS[view];
@@ -53,16 +53,16 @@ function buildPage({ markup, view, framework, classes, slot = 0, theme, head = '
     for (let i = 0; i < mashup.slots; i++) views.push(i === slot ? ours : `<div class="view view--${view}"></div>`);
     body = `<div class="${mashup.classes}">${views.join('')}</div>`;
   }
-  const themes = FRAMEWORK.compare(framework, '3.2.0') >= 0
+  const themes = !bare && FRAMEWORK.compare(framework, '3.2.0') >= 0
     ? [...THEMES].sort().map((t) => `<link rel="stylesheet" href="/css/${framework}/themes/${t}-theme.css">`).join('\n    ') : '';
   return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
-    <link rel="stylesheet" href="/css/${framework}/plugins.min.css" />
+    ${bare ? '' : `<link rel="stylesheet" href="/css/${framework}/plugins.min.css" />`}
     ${themes}
-    <script type="module">import "/js/${framework}/plugins.min.js"</script>
+    ${bare ? '' : `<script type="module">import "/js/${framework}/plugins.min.js"</script>`}
     ${head}
   </head>
   <body class="environment trmnl">

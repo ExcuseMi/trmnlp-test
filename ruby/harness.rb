@@ -17,6 +17,7 @@ require 'json'
 require 'open3'
 require 'tmpdir'
 require 'timeout'
+require 'digest'
 require_relative 'mock_proxy'
 
 # Liquid's 'now' and every Time.now during a render follow the test clock.
@@ -129,6 +130,7 @@ module TrmnlpTest
     def initialize
       @plugins = {}
       @ca = CA.new(File.join(CACHE, 'ca-v1'))
+      @tx_cache = {}
     end
 
     def plugin(dir)
@@ -282,6 +284,23 @@ module TrmnlpTest
       return { 'ran' => false, 'language' => language, 'error' => "unsupported serverless_language: #{language}" } unless cmd
 
       input = data.merge('trmnl' => data['trmnl'].slice('user', 'device', 'plugin_settings', 'state'))
+      # the same code, input, mocks and clock give the same output: reuse it (and replay the
+      # requests it made) instead of starting the runtime again; cacheTransform: false opts out
+      key = Digest::SHA1.hexdigest(JSON.generate([File.read(tx['path']), language, input, req['mocks'], req['network'], now.to_f,
+                                                 req['env'], req['timeoutMs'], req['freezeTime'], ENV["TRMNLP_TEST_DEPS_#{language.upcase}"]]))
+      cache = req['cacheTransform'] != false && req['network'] != 'live'
+      if cache && (hit = @tx_cache[key])
+        hit[:requests].each { |r| table.record(r) }
+        return hit[:result].merge('cached' => true)
+      end
+      seen = table.requests.size
+      result = execute_transform(plugin, tx, language, cmd, input, req, table, now)
+      @tx_cache.shift if @tx_cache.size >= 500
+      @tx_cache[key] = { result:, requests: table.requests[seen..] } if cache
+      result
+    end
+
+    def execute_transform(plugin, tx, language, cmd, input, req, table, now)
       timeout_s = (req['timeoutMs'] || 5000) / 1000.0
       proxy = MockProxy.new(ca: @ca, table:).start
       Dir.mktmpdir('trmnlp-test-tx-') do |dir|

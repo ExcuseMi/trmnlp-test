@@ -7,8 +7,6 @@ const path = require('path');
 const crypto = require('crypto');
 const { cacheDir, writeAtomic } = require('./paths');
 
-const PAGE_ORIGIN = 'https://trmnl.test';
-const PAGE_URL = PAGE_ORIGIN + '/render';
 
 function matchMock(mocks, method, url) {
   for (const m of mocks || []) {
@@ -55,32 +53,29 @@ async function cachedFetch(url, { offline }) {
   return inflight.get(url);
 }
 
-async function attachRoutes(page, { html, mocks, requests, offline, assetHost = 'https://trmnl.com', missing }) {
-  await page.route('**/*', async (route) => {
-    const req = route.request();
-    let url = req.url();
-    if (url === PAGE_URL) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
-    if (url.startsWith(PAGE_ORIGIN + '/')) url = assetHost + url.slice(PAGE_ORIGIN.length);
-    if (!/^https?:/.test(url)) return route.continue();
-    const mock = matchMock(mocks, req.method(), url);
-    if (mock) {
-      requests.push({ method: req.method(), url, mocked: true, via: 'browser', status: mock.status || 200 });
-      const { body, contentType } = mockBody(mock);
-      return route.fulfill({ status: mock.status || 200, headers: mock.headers, contentType, body });
-    }
-    const framework = url.startsWith(assetHost) || url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com');
-    if (!framework) requests.push({ method: req.method(), url, mocked: false, via: 'browser' });
-    if (req.method() !== 'GET') return route.abort();
-    try {
-      const res = await cachedFetch(url, { offline });
-      if (!res) { missing.push(url); return route.abort(); }
-      if (res.status >= 400) missing.push(`${url} (${res.status})`);
-      return route.fulfill({ status: res.status, contentType: res.contentType, body: res.body, headers: { 'access-control-allow-origin': '*' } });
-    } catch (e) {
-      missing.push(`${url} (${e.message})`);
-      return route.abort();
-    }
-  });
+// A request that leaves the page's origin: a mock first, then the asset cache.
+// ctx: { mocks, requests, offline, missing }
+async function handleExternal(route, ctx, assetHost = 'https://trmnl.com') {
+  const req = route.request();
+  const url = req.url();
+  const mock = matchMock(ctx.mocks, req.method(), url);
+  if (mock) {
+    ctx.requests.push({ method: req.method(), url, mocked: true, via: 'browser', status: mock.status || 200 });
+    const { body, contentType } = mockBody(mock);
+    return route.fulfill({ status: mock.status || 200, headers: mock.headers, contentType, body });
+  }
+  const framework = url.startsWith(assetHost) || url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com');
+  if (!framework) ctx.requests.push({ method: req.method(), url, mocked: false, via: 'browser' });
+  if (req.method() !== 'GET') return route.abort();
+  try {
+    const res = await cachedFetch(url, { offline: ctx.offline });
+    if (!res) { ctx.missing.push(url); return route.abort(); }
+    if (res.status >= 400) ctx.missing.push(`${url} (${res.status})`);
+    return route.fulfill({ status: res.status, contentType: res.contentType, body: res.body, headers: { 'access-control-allow-origin': '*' } });
+  } catch (e) {
+    ctx.missing.push(`${url} (${e.message})`);
+    return route.abort();
+  }
 }
 
-module.exports = { attachRoutes, PAGE_URL, matchMock };
+module.exports = { handleExternal, matchMock, cachedFetch };

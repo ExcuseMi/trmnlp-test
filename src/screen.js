@@ -32,6 +32,8 @@ class TransformResult {
   }
 }
 
+// screen.page is the render's frame (an iframe of the worker's host page, as in TRMNL's
+// editor): locator(), evaluate(), waitForTimeout() and the rest of Playwright's Frame API.
 class Screen {
   constructor(props) { Object.assign(this, props); }
 
@@ -43,7 +45,8 @@ class Screen {
 
   async rawPng() {
     if (!this._raw) {
-      const buffer = await this.page.screenshot({ clip: { x: 0, y: 0, width: this.device.width, height: this.device.height }, animations: 'disabled', caret: 'hide' });
+      await this.host.activate(this);
+      const buffer = await this.host.page.screenshot({ clip: { x: 0, y: 0, width: this.device.width, height: this.device.height }, animations: 'disabled', caret: 'hide' });
       this._raw = PNG.sync.read(buffer);
     }
     return new Png(this._raw, { palette: { framework_class: 'screen--color-full' }, model: this.device.model });
@@ -62,6 +65,15 @@ class Screen {
 
   // The QR code in the picture and its polarity: { text, inverted } (text null: none found).
   // A code is tried as drawn first, then inverted (white on black, e.g. after dark mode).
+  // The picture of one element (its bounding box at the page's device scale); quantize: true
+  // reduces it to the device palette like png() does
+  async elementPng(selector, { quantize: reduce = false, dither = true } = {}) {
+    await this.host.activate(this);
+    const buffer = await this.page.locator(selector).first().screenshot({ animations: 'disabled', caret: 'hide' });
+    const png = Png.fromBuffer(buffer, { palette: { framework_class: 'screen--color-full' }, model: this.device.model });
+    return reduce ? new Png(quantize(png.png, this.device.palette, { dither }), { palette: this.device.palette, model: this.device.model }) : png;
+  }
+
   async qrInfo(rect) {
     // decode the undithered picture: dither noise around modules only ever hurts a scanner
     const png = await this.png({ dither: false });
@@ -193,7 +205,7 @@ class Screen {
       if (!r.mocked && r.status === 599) p.push(`unmocked ${r.via === 'polling' ? 'polling' : 'transform'} request: ${r.method} ${r.url} (add it to mocks, or network: 'live')`);
     }
     const b = this.screenBox;
-    if (b && (Math.abs(b.width - this.device.width) > 2 || Math.abs(b.height - this.device.height) > 2)) {
+    if (b && !(this.options && this.options.bare) && (Math.abs(b.width - this.device.width) > 2 || Math.abs(b.height - this.device.height) > 2)) {
       p.push(`the screen is ${Math.round(b.width)}x${Math.round(b.height)} but the device picture is ${this.device.width}x${this.device.height}`);
     }
     return p;

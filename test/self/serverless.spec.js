@@ -50,3 +50,28 @@ test('a slow transform hits the hosted 5 s limit', async ({ trmnl }) => {
   expect(run.timedOut).toBe(true);
   expect(run).not.toStayWithinServerlessLimits({ timeoutMs: 1000 });
 });
+
+test.describe('speed', () => {
+  test('an identical transform input reuses the output and replays its requests', async ({ trmnl }) => {
+    const plugin = trmnl.plugin('../fixtures/serverless-node');
+    const opts = { mocks: weather, now: '2026-05-05T05:05:00Z' };
+    const first = await plugin.transform(opts);
+    const second = await plugin.transform(opts);
+    expect(second.output).toEqual(first.output);
+    expect(second).toHaveRequested('https://api.example.com/weather*', { times: 1 });
+    const fresh = await plugin.transform({ ...opts, cacheTransform: false });
+    expect(fresh.durationMs).toBeGreaterThan(0);
+  });
+
+  test('renderMarkup: a piece of markup, bare and at a device scale, and its picture', async ({ trmnl }) => {
+    const svg = '<svg data-dot width="20" height="10" viewBox="0 0 2 1"><rect width="1" height="1" fill="#000"/></svg>';
+    const screen = await trmnl.renderMarkup(svg, { bare: true, deviceScale: 3 });
+    const png = await screen.elementPng('[data-dot]');
+    expect([png.width, png.height]).toEqual([60, 30]);
+    expect(png.pixel(10, 10).gray).toBe(0);
+    expect(png.pixel(50, 10).gray).toBe(255);
+    const framed = await trmnl.renderMarkup('<span class="title" data-t>Hi</span>', { device: 'v2' });
+    expect(framed.classes).toContain('screen--v2');
+    await expect(framed).toShowText('Hi');
+  });
+});
