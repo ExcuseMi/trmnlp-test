@@ -126,7 +126,40 @@ module TrmnlpTest
     end
   end
 
+  # Computed mocks: the proxy (another thread) asks Node for an answer over the protocol and
+  # waits for it; the stdin reader thread hands the reply back.
+  class Callbacks
+    def initialize(out)
+      @out = out
+      @lock = Mutex.new
+      @waiting = {}
+      @next = 0
+    end
+
+    def call(id, request)
+      queue = Queue.new
+      cid = @lock.synchronize { @next += 1 }
+      @lock.synchronize { @waiting[cid] = queue }
+      write('callback' => id, 'cid' => cid, 'request' => request)
+      answer = queue.pop(timeout: 30)
+      raise "computed mock #{id} did not answer within 30 s" if answer.nil?
+
+      answer
+    ensure
+      @lock.synchronize { @waiting.delete(cid) }
+    end
+
+    def resolve(cid, answer)
+      queue = @lock.synchronize { @waiting[cid] }
+      queue&.push(answer || {})
+    end
+
+    def write(msg) = @lock.synchronize { @out.puts(JSON.generate(msg)) }
+  end
+
   class Runner
+    attr_writer :callback
+
     def initialize
       @plugins = {}
       @ca = CA.new(File.join(CACHE, 'ca-v1'))
@@ -159,11 +192,11 @@ module TrmnlpTest
       fields = custom_fields(plugin, req, use_yml)
       plugin.config.project.define_singleton_method(:custom_fields) { fields }
       strategy = req['strategy'] || plugin.config.plugin.strategy || 'webhook'
-      table = MockTable.new(req['mocks'], req['network'])
+      table = MockTable.new(req['mocks'], req['network'], callback: @callback)
       out = { 'strategy' => strategy, 'customFields' => fields, 'polling' => nil }
 
       trmnl = trmnl_namespace(plugin, req, fields, strategy, now)
-      source = source_data(plugin, req, strategy, table, out)
+      source = source_data(plugin, req, strategy, table, out, trmnl)
       data = use_yml ? deep_merge(yml_variables(plugin), source) : source
       data['trmnl'] = trmnl
       out['mergeVariables'] = data
@@ -174,21 +207,46 @@ module TrmnlpTest
         out['transform'] = result
         data = (result['output'].is_a?(Hash) ? result['output'] : data).dup
         data.delete('trmnl')
-        out['nextState'] = data.delete('trmnl_state') if data.key?('trmnl_state')
+        write_state(out, data.delete('trmnl_state'), req) if data.key?('trmnl_state')
+        # the polling URL and the transform saw the previous run's state; the markup sees this one's
+        trmnl = trmnl.merge('state' => out['nextState']) if out.key?('nextState')
         data['trmnl'] = trmnl
       else
         out['transform'] = { 'ran' => false, 'reason' => tx ? 'disabled' : 'no transform file', 'language' => tx&.dig('language') }
       end
       data = deep_merge(data, req['after']) if req['after'].is_a?(Hash)
       out['data'] = data
+      # what TRMNL stores from this run: the next run's trmnl.previous_merge_variables
+      out['stored'] = data.except('trmnl')
       markup = { 'qr' => req['qr'] || 'server', 'crlf' => req['crlf'] }
       out['views'] = (req['views'] || plugin.views).to_h { |v| [v, render_view(plugin, v, data, now, req['strictVariables'], markup)] }
       out['requests'] = table.requests
       out
     end
 
+    STATE_LIMIT = 8192
+
+    # TRMNL's rules for a returned trmnl_state (help.trmnl.com, Saved State): an object of at most
+    # 8192 bytes, and no write after a failed fetch. Otherwise the last state is kept.
+    def write_state(out, state, req)
+      size = JSON.generate(state).bytesize
+      reason =
+        if !state.is_a?(Hash) then "trmnl_state must be an object (got #{state.class.name.downcase}); TRMNL ignores it and keeps the last state"
+        elsif size > STATE_LIMIT then "trmnl_state is #{size} bytes; TRMNL ignores writes over #{STATE_LIMIT} bytes and keeps the last state"
+        end
+      if reason
+        out['stateError'] = reason
+        out['nextState'] = req['state'] || {}
+      elsif out['fetchFailed']
+        out['stateSkipped'] = 'a fetch failed: TRMNL skips the state write and keeps the last state'
+        out['nextState'] = req['state'] || {}
+      else
+        out['nextState'] = state
+      end
+    end
+
     def custom_fields(plugin, req, use_yml)
-      fields = plugin.field_defaults
+      fields = req['fieldDefaults'] == false ? {} : plugin.field_defaults
       fields.merge!(plugin.stringify(plugin.trmnlp_yml['custom_fields'] || {})) if use_yml
       fields.merge!(plugin.stringify(req['fields'] || {}))
       fields
@@ -233,37 +291,53 @@ module TrmnlpTest
 
     # webhook / data: given by the test; static: settings.yml; polling: fetched
     # through the mocks with trmnlp's own URL rendering and response parsing.
-    def source_data(plugin, req, strategy, table, out)
+    def source_data(plugin, req, strategy, table, out, trmnl)
       return req['data'] || {} if req.key?('data')
       return req['webhook'] || {} if req.key?('webhook')
 
       case strategy
       when 'static' then plugin.config.plugin.static_data
-      when 'polling' then poll(plugin, table, out)
+      when 'polling' then poll(plugin, table, out, trmnl)
       else req['webhook'] || {}
       end
     end
 
     Response = Struct.new(:status, :body, :headers)
 
-    def poll(plugin, table, out)
+    # The URL, headers and body are templated with the custom fields and `trmnl` (whose state is
+    # the previous run's). A fetch that fails (no answer, a reset, an unmocked request) gives an
+    # empty payload for that URL and marks the run: TRMNL then skips the state write.
+    def poll(plugin, table, out, trmnl)
       cfg = plugin.config.plugin
-      urls = cfg.polling_urls
+      vars = { 'trmnl' => trmnl.slice('user', 'device', 'plugin_settings', 'state') }
+      urls = cfg.polling_urls(extra_variables: vars)
       verb = cfg.polling_verb.upcase
-      headers = cfg.polling_headers
-      body = verb == 'POST' ? cfg.polling_body : nil
+      headers = cfg.polling_headers(extra_variables: vars)
+      body = verb == 'POST' ? cfg.polling_body(extra_variables: vars) : nil
       poller = TRMNLP::Poller.new(config: plugin.config, paths: plugin.paths, oauth_session: nil,
                                   reporter: TRMNLP::Reporter.new(quiet: true))
       out['polling'] = { 'urls' => urls, 'verb' => verb, 'headers' => headers, 'body' => body }
       responses = urls.map do |url|
+        entry = { 'method' => verb, 'url' => url, 'headers' => headers.transform_keys(&:downcase),
+                  'rawHeaders' => headers.to_a, 'body' => body, 'via' => 'polling' }
         mock = table.find(verb, url)
+        mock = MockResponse.resolve(mock, table, entry.dup) if mock
+        sleep(((mock['delayMs'] || 0) + (mock['bodyDelayMs'] || 0)) / 1000.0) if mock
+        if mock && mock['error'] == 'reset'
+          table.record(entry.merge('mocked' => true, 'status' => nil, 'error' => 'reset'))
+          out['fetchFailed'] = true
+          next {}
+        end
         status, rheaders, rbody =
           if mock then MockResponse.build(mock)
           elsif table.live? then live_fetch(verb, url, headers, body)
           else MockResponse.unmocked(verb, url)
           end
-        table.record('method' => verb, 'url' => url, 'headers' => headers, 'body' => body,
-                     'mocked' => !mock.nil?, 'status' => status, 'via' => 'polling')
+        table.record(entry.merge('mocked' => !mock.nil?, 'status' => status))
+        if status == 599
+          out['fetchFailed'] = true
+          next {}
+        end
         response = Response.new(status, rbody, rheaders.transform_keys(&:downcase))
         # trmnlp 0.14.2 added the url (for its warning on a non-2xx status)
         poller.method(:parse_response).arity == 1 ? poller.send(:parse_response, response) : poller.send(:parse_response, response, url)
@@ -275,6 +349,8 @@ module TrmnlpTest
       conn = Faraday.new(url:, headers:)
       res = verb == 'POST' ? conn.post { |r| r.body = body } : conn.get
       [res.status, res.headers.to_h, res.body]
+    rescue Faraday::Error => e
+      [599, {}, e.message]
     end
 
     # ------------------------------------------------------------------ transform
@@ -283,7 +359,8 @@ module TrmnlpTest
       cmd = INTERPRETERS[language]
       return { 'ran' => false, 'language' => language, 'error' => "unsupported serverless_language: #{language}" } unless cmd
 
-      input = data.merge('trmnl' => data['trmnl'].slice('user', 'device', 'plugin_settings', 'state'))
+      input = data.merge('trmnl' => data['trmnl'].slice('user', 'device', 'plugin_settings', 'state')
+                                      .merge('previous_merge_variables' => req['previousMergeVariables'] || {}))
       # the same code, input, mocks and clock give the same output: reuse it (and replay the
       # requests it made) instead of starting the runtime again; cacheTransform: false opts out
       key = Digest::SHA1.hexdigest(JSON.generate([File.read(tx['path']), language, input, req['mocks'], req['network'], now.to_f,
@@ -411,7 +488,7 @@ module TrmnlpTest
       # crlf: true renders the template with CR LF newlines (e.g. markup pasted from Windows)
       source = source.gsub(/\r?\n/, "\r\n") if markup['crlf']
       Thread.current[:trmnlp_test_now] = now
-      template = Liquid::Template.parse(source, environment: plugin.liquid_environment(markup['qr']))
+      template = parsed_template(plugin, source, markup['qr'])
       markup = template.render(data, strict_variables: strict ? true : false)
       errors = template.errors.map(&:to_s)
       { 'markup' => markup, 'error' => nil, 'warnings' => errors }
@@ -419,6 +496,16 @@ module TrmnlpTest
       { 'markup' => e.message, 'error' => e.message }
     ensure
       Thread.current[:trmnlp_test_now] = nil
+    end
+
+    # Parsing a large template costs more than rendering it, and the source rarely changes
+    # between renders: keep the parsed ones (per source and qr_code mode), the last 64.
+    def parsed_template(plugin, source, qr)
+      @templates ||= {}
+      key = [plugin.dir, qr.to_s, Digest::SHA1.hexdigest(source)]
+      template = @templates.delete(key) || Liquid::Template.parse(source, environment: plugin.liquid_environment(qr))
+      @templates.shift if @templates.size >= 64
+      @templates[key] = template
     end
 
     # ------------------------------------------------------------------ lint
@@ -447,13 +534,25 @@ end
 
 runner = TrmnlpTest::Runner.new
 PROTOCOL.sync = true
-PROTOCOL.puts(JSON.generate({ 'ready' => true, 'trmnlp' => TRMNLP::VERSION }))
-$stdin.each_line do |line|
-  req = JSON.parse(line)
+callbacks = TrmnlpTest::Callbacks.new(PROTOCOL)
+runner.callback = callbacks.method(:call)
+callbacks.write('ready' => true, 'trmnlp' => TRMNLP::VERSION)
+
+# stdin carries requests and, while one runs, replies to its computed mocks
+jobs = Queue.new
+Thread.new do
+  $stdin.each_line do |line|
+    msg = JSON.parse(line)
+    msg.key?('callbackReply') ? callbacks.resolve(msg['callbackReply'], msg['response']) : jobs.push(msg)
+  end
+  jobs.push(nil)
+end
+
+while (req = jobs.pop)
   begin
-    PROTOCOL.puts(JSON.generate({ 'id' => req['id'], 'ok' => true, 'result' => runner.call(req) }))
+    callbacks.write({ 'id' => req['id'], 'ok' => true, 'result' => runner.call(req) })
   rescue StandardError, ScriptError => e
-    PROTOCOL.puts(JSON.generate({ 'id' => req['id'], 'ok' => false, 'error' => "#{e.class}: #{e.message}",
-                                  'backtrace' => e.backtrace&.first(8) }))
+    callbacks.write({ 'id' => req['id'], 'ok' => false, 'error' => "#{e.class}: #{e.message}",
+                      'backtrace' => e.backtrace&.first(8) })
   end
 end

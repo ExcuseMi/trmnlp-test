@@ -51,15 +51,28 @@ function toSeconds(now) {
   return t / 1000;
 }
 
-// mocks: [{url, json|body|bodyBase64, status, headers, method, times, delayMs}]
-// or {'https://api/x': {json}} or {'https://api/x': {...plain object = json}}
+// mocks: [{url, json|body|bodyBase64, status, headers, method, times, delayMs, bodyDelayMs, error, respond}]
+// or {'https://api/x': {json}} or {'https://api/x': {...plain object = json}} or {'https://api/x': (req) => answer}
+// respond(request) computes the answer (same keys as a mock) from { method, url, headers, rawHeaders, body }.
+const MOCK_KEYS = ['json', 'body', 'bodyBase64', 'status', 'headers', 'error', 'delayMs', 'bodyDelayMs', 'times', 'method', 'respond'];
 function normaliseMocks(mocks) {
   if (!mocks) return [];
   if (Array.isArray(mocks)) return mocks;
   return Object.entries(mocks).map(([url, r]) => {
-    const keys = ['json', 'body', 'bodyBase64', 'status', 'headers', 'error', 'delayMs', 'times', 'method'];
-    if (r && typeof r === 'object' && !Array.isArray(r) && Object.keys(r).some((k) => keys.includes(k))) return { url, ...r };
+    if (typeof r === 'function') return { url, respond: r };
+    if (r && typeof r === 'object' && !Array.isArray(r) && Object.keys(r).some((k) => MOCK_KEYS.includes(k))) return { url, ...r };
     return typeof r === 'string' ? { url, body: r } : { url, json: r };
+  });
+}
+
+// for the harness: respond functions become ids it calls back with
+function serialiseMocks(mocks, harness, ids) {
+  return mocks.map((m) => {
+    if (typeof m.respond !== 'function') return m;
+    const id = harness.register(m.respond);
+    ids.push(id);
+    const { respond, ...rest } = m;
+    return { ...rest, dynamic: id };
   });
 }
 
@@ -113,6 +126,7 @@ class Trmnl {
     const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes');
     const noBleed = o.noScreenPadding ?? info.settings.no_screen_padding === 'yes';
     const now = toSeconds(o.now);
+    const callbackIds = [];
     const trmnl = mergeDeep({
       device: { ...device.namespace },
       user: { ...(o.timeZone && { time_zone_iana: o.timeZone }), ...(o.locale && { locale: o.locale }), ...(o.user || {}) },
@@ -120,13 +134,19 @@ class Trmnl {
     }, o.trmnl || {});
     const req = {
       plugin: this.dir, fields: o.fields, strategy: o.strategy, now, state: o.state, trmnl, device: trmnl.device,
-      transform: o.transform, mocks: normaliseMocks(o.mocks), network: o.network || o.serverless.network || 'mock',
+      transform: o.transform, mocks: serialiseMocks(normaliseMocks(o.mocks), this.harness, callbackIds), network: o.network || o.serverless.network || 'mock',
       timeoutMs: o.timeoutMs || o.serverless.timeoutMs || 5000, freezeTime: o.freezeTime, strictVariables: o.strictVariables,
-      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, cacheTransform: o.cacheTransform, qr: qrMode(o.qr ?? this.config.qr), crlf: !!o.crlf,
+      env: o.env, trmnlpYml: o.trmnlpYml, after: o.after, views, cacheTransform: o.cacheTransform,
+      previousMergeVariables: o.previousMergeVariables, fieldDefaults: o.fieldDefaults, qr: qrMode(o.qr ?? this.config.qr), crlf: !!o.crlf,
     };
     if (o.data !== undefined) req.data = o.data;
     if (o.webhook !== undefined) req.webhook = applyAll(o.webhookStore || {}, o.webhook, { limit: o.webhookLimit || 'standard' });
-    const run = await this.harness.call('run', req);
+    let run;
+    try {
+      run = await this.harness.call('run', req);
+    } finally {
+      this.harness.release(callbackIds);
+    }
     return { run, o, info, device, darkMode, noBleed, now };
   }
 
@@ -146,17 +166,17 @@ class Trmnl {
     const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode, noBleed,
       theme: o.theme, scale: o.scale, textScale: o.textScale, fonts: o.fonts, extra: o.screenClasses });
     const rendered = run.views[view];
-    const html = buildPage({ markup: rendered.markup, view, framework, classes, slot: o.slot || 0, theme: o.theme, head: o.head });
+    const html = buildPage({ markup: rendered.markup, view, framework, classes, slot: o.slot || 0, slotSize: o.slotSize, theme: o.theme, head: o.head });
 
     const shown = await this.openPage(html, { device, now, o });
     const label = [device.model.name + (device.orientation === 'portrait' ? ' portrait' : ''), view,
       device.palette.id !== findPalette(device.model).id && device.palette.id, darkMode && 'dark',
       o.theme && `theme ${o.theme}`, o.scale && `scale ${o.scale}`, o.textScale && `text ${o.textScale}`,
-      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.qr && o.qr !== 'server' && `qr ${o.qr}`, o.crlf && 'crlf', o.note].filter(Boolean).join(' · ');
+      o.fonts && `fonts ${o.fonts}`, o.framework && `v${framework}`, o.transform === false && 'no transform', o.qr && o.qr !== 'server' && `qr ${o.qr}`, o.crlf && 'crlf', o.slotSize && `slot ${o.slotSize.width}x${o.slotSize.height}`, o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
       html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
       data: run.data, mergeVariables: run.mergeVariables, customFields: run.customFields, transform: new TransformResult(run),
-      state: run.nextState, polling: run.polling, ...shown,
+      state: run.nextState, stored: run.stored, polling: run.polling, ...shown,
       device, view, framework, classes, darkMode, label, options: o, now, checkProblems: [],
     });
     this.screens.push(screen);
@@ -171,7 +191,12 @@ class Trmnl {
     ctx.missing = ctx.missingAssets;
     const { frame, iframe, pageId } = await host.open(html, { width: device.width, height: device.height, now, ctx });
     await frame.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
-    const settle = o.settleMs ?? 100;
+    // the plugin's own sign that it is done: a selector that appears, or a predicate that holds
+    if (o.waitFor) {
+      if (typeof o.waitFor === 'string') await frame.waitForSelector(o.waitFor, { state: 'attached', timeout: o.waitForTimeoutMs || 10000 });
+      else await frame.waitForFunction(o.waitFor, o.waitForArg, { timeout: o.waitForTimeoutMs || 10000 });
+    }
+    const settle = o.settleMs ?? (o.waitFor ? 0 : 100);
     if (settle) await frame.waitForTimeout(settle);
     // TRMNL keeps --pixel-ratio at 1 while the page lays out and applies the panel's ratio at
     // capture (the framework then scales the screen to the device's pixels): do the same
@@ -201,7 +226,7 @@ class Trmnl {
     const darkMode = darkModeOf(o.darkMode);
     const classes = screenClasses({ model: device.model, palette: device.palette, orientation: device.orientation, darkMode,
       noBleed: o.noScreenPadding, theme: o.theme, scale: o.scale, textScale: o.textScale, fonts: o.fonts, extra: o.screenClasses });
-    const html = buildPage({ markup, view, framework, classes, slot: o.slot || 0, theme: o.theme, head: o.head, bare: o.bare });
+    const html = buildPage({ markup, view, framework, classes, slot: o.slot || 0, slotSize: o.slotSize, theme: o.theme, head: o.head, bare: o.bare });
     const now = toSeconds(o.now);
     const shown = await this.openPage(html, { device, now, o });
     const label = [device.model.name, view, 'markup', o.bare && 'bare', o.deviceScale && `x${o.deviceScale}`, o.note].filter(Boolean).join(' · ');
@@ -224,6 +249,8 @@ class Trmnl {
     const s = {
       webhookData: base.webhookData || {},
       state: base.state || {},
+      // what the last run stored: the next transform's trmnl.previous_merge_variables
+      previousMergeVariables: base.previousMergeVariables || {},
       posted: !!base.webhookData,
       transformed: false,
       async webhook(body, { limit } = {}) {
@@ -238,20 +265,22 @@ class Trmnl {
         s.posted = true;
         const info = await trmnl.info();
         if (info.transform && (base.strategy || info.strategy) === 'webhook' && base.transform !== false) {
-          const r = await trmnl.transform({ ...base, data: merged, state: s.state });
+          const r = await trmnl.transform({ ...base, data: merged, state: s.state, previousMergeVariables: s.previousMergeVariables });
           if (r.error) return { status: 200, transform: r, error: r.error, data: s.webhookData };
           const stored = { ...r.data };
           delete stored.trmnl;
           s.webhookData = stored;
+          s.previousMergeVariables = stored;
           s.transformed = true;
           if (r.state !== undefined) s.state = r.state;
           return { status: 200, transform: r, data: stored };
         }
         s.webhookData = merged;
+        s.previousMergeVariables = merged;
         return { status: 200, data: merged };
       },
       opts(opts) {
-        const o = { ...base, ...opts, state: opts.state || s.state };
+        const o = { ...base, ...opts, state: opts.state || s.state, previousMergeVariables: opts.previousMergeVariables || s.previousMergeVariables };
         delete o.webhookData;
         if (s.posted && !('data' in opts) && !('webhook' in opts)) {
           o.data = s.webhookData;
@@ -262,11 +291,13 @@ class Trmnl {
       async transform(opts = {}) {
         const r = await trmnl.transform(s.opts(opts));
         if (r.state !== undefined) s.state = r.state;
+        if (r.ran && r.stored) s.previousMergeVariables = r.stored;
         return r;
       },
       async render(opts = {}) {
         const sc = await trmnl.render(s.opts(opts));
         if (sc.state !== undefined) s.state = sc.state;
+        if (sc.transform.ran && sc.stored) s.previousMergeVariables = sc.stored;
         return sc;
       },
     };
@@ -322,4 +353,4 @@ function mergeDeep(a, b) {
   return out;
 }
 
-module.exports = { Trmnl, toSeconds, normaliseMocks, QR_MODES };
+module.exports = { Trmnl, toSeconds, normaliseMocks, serialiseMocks, QR_MODES };

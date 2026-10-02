@@ -1,6 +1,6 @@
 # trmnlp-test specification
 
-Version 0.1.14. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
+Version 0.1.15. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
 
 ## 1. Purpose
 
@@ -94,7 +94,7 @@ A trmnlp project: `src/settings.yml`, `src/{full,half_horizontal,half_vertical,q
 
 These are merged in order, later sources winning:
 
-1. the `default` of each field in `settings.yml` (fields without a value, such as `author_bio`, `copyable` and `copyable_webhook_url`, are skipped)
+1. the `default` of each field in `settings.yml` (fields without a value, such as `author_bio`, `copyable` and `copyable_webhook_url`, are skipped; `fieldDefaults: false` leaves the defaults out)
 2. `custom_fields` in `.trmnlp.yml`
 3. the test's `fields`
 
@@ -108,7 +108,7 @@ Every render receives the full namespace TRMNL sends:
 - `device`: `friendly_id`, `percent_charged`, `wifi_strength`, `width`, `height` (from the model, swapped in portrait), `model`, `bit_depth`, `firmware_version`, `refresh_interval_seconds`, `sleep_mode_enabled`, `sleep_start_time`, `sleep_end_time`, `orientation`
 - `system`: `timestamp_utc` (`now`)
 - `plugin_settings`: `instance_name` (the plugin's name), `refresh_interval_minutes`, `strategy`, `dark_mode`, `no_screen_padding`, `custom_fields_values`, `data_fetched_utc`; plus `polling_url` and `polling_headers` for polling plugins
-- `state`: the previous `trmnl_state` (section 5.5)
+- `state`: saved state (section 5.5). The polling URL and the transform see the previous run's; the markup sees what the transform wrote in this run.
 
 Overrides are layered in this order: `variables.trmnl` in `.trmnlp.yml`, then the test's `trmnl`. Test options also set `timeZone`, `locale`, `user`, `instanceName` and the device fields.
 
@@ -121,7 +121,7 @@ The source decides the merge variables. The first that applies wins:
 | `data` | given | Used as is: the source is skipped. With `transform: false` it is exactly what the template gets. |
 | `webhook` | given | The stored webhook data (section 5.4). |
 | `static` | strategy `static` | `static_data` from `settings.yml`. |
-| `polling` | strategy `polling` | Each URL in `polling_url`, rendered with the custom fields (Liquid); headers and body likewise. Responses come from mocks, or from the network with `network: 'live'`. Parsed by trmnlp's own parser: JSON, XML, text (sniffed JSON) and non-2xx bodies (trmnlp 0.14.2 and later). Several URLs become `IDX_0`, `IDX_1`, and so on. An array response is wrapped as `{ data: [...] }`. |
+| `polling` | strategy `polling` | Each URL in `polling_url`, rendered with the custom fields and `trmnl` (Liquid, e.g. `{{ trmnl.state.cursor }}`); headers and body likewise. A fetch that fails (no answer, a reset, an unmocked request) gives an empty payload for that URL. Responses come from mocks, or from the network with `network: 'live'`. Parsed by trmnlp's own parser: JSON, XML, text (sniffed JSON) and non-2xx bodies (trmnlp 0.14.2 and later). Several URLs become `IDX_0`, `IDX_1`, and so on. An array response is wrapped as `{ data: [...] }`. |
 
 The `variables` in `.trmnlp.yml` (except `trmnl`) are the base and are deep-merged under the source data. `trmnlpYml: false` ignores `.trmnlp.yml` entirely.
 
@@ -136,11 +136,11 @@ A webhook body is `{ merge_variables, merge_strategy?, stream_limit? }`. A plain
 
 - The language comes from `serverless_language`, or else from the file extension. Python, Ruby, Node and PHP are supported.
 - The code runs in trmnlp's own wrapper (`TRMNLP::TransformBackend::Wrapper`): `run(input)`, `transform(input)` (Node) or `result`.
-- `input` is the merge variables plus `trmnl` reduced to `user`, `device`, `plugin_settings`, `state`. The output replaces the merge variables; an array output becomes `{ data: [...] }`.
-- `trmnl_state` in the output is taken out and becomes `state` (the next run's `trmnl.state`).
+- `input` is the merge variables plus `trmnl` reduced to `user`, `device`, `plugin_settings`, `state` and `previous_merge_variables` (what the last run stored; `{}` on a first run, from `previousMergeVariables` or the session). `trmnl.system` is withheld, as on TRMNL. The output replaces the merge variables; an array output becomes `{ data: [...] }`.
+- `trmnl_state` in the output is taken out and saved, following TRMNL's rules (help.trmnl.com, Saved State). It must be an object of at most 8192 bytes; otherwise it is ignored, the last state is kept, and `stateError` says why (a problem for `toRenderCleanly`). After a failed fetch the write is skipped (`stateSkipped`) and the last state is kept.
 - The runtime is a subprocess with a clean environment: `TZ=UTC`, the clock frozen at `now` (libfaketime, ticking from `now`; `freezeTime: false` disables it), HTTP(S) through the mock proxy (section 5.7), and the dependency paths.
 - Limits: killed after `timeoutMs` (default 5000, TRMNL's limit). Duration and peak memory (RSS) are measured. `toStayWithinServerlessLimits` checks them against 5 s and 128 MB.
-- Result: `ran`, `language`, `input`, `output`, `stdout`, `stderr`, `exitCode`, `error`, `timedOut`, `durationMs`, `maxRssMb`, `cached`, `requests`.
+- Result: `ran`, `language`, `input`, `output`, `stdout`, `stderr`, `exitCode`, `error`, `timedOut`, `durationMs`, `maxRssMb`, `cached`, `requests`, `state`, `stateError`, `stateSkipped`, `fetchFailed`, `stored`.
 - Cache: an identical code, input, mocks, clock, environment and dependency set reuse the previous output in the same worker, and replay its recorded requests. It is off with `cacheTransform: false` and always off with `network: 'live'`. It assumes the transform is deterministic for a given input; a transform that uses randomness should set `cacheTransform: false`.
 - `transform: false` skips the transform.
 
@@ -162,15 +162,19 @@ The hosted built-ins are always installed: `requests` for Python and `httparty` 
 `mocks` is a list or an object:
 
 ```js
-mocks: [{ url, method?, status?, headers?, json? | body? | bodyBase64?, times?, delayMs?, error?: 'reset' }]
+mocks: [{ url, method?, status?, headers?, json? | body? | bodyBase64?, times?, delayMs?, bodyDelayMs?, error?: 'reset', respond? }]
 mocks: { 'https://api.example.com/x': { temp: 21 } }   // plain value = json; string = body
+mocks: { 'https://api.example.com/*': (req) => ({ json: { city: new URL(req.url).searchParams.get('q') } }) }
 ```
 
 - `url` is an exact URL, a glob with `*`, or a regex written `/.../`. Without `?` in the pattern, the query string is ignored.
 - `times` limits how often a mock answers; the next matching mock answers after it.
+- `respond(request)` computes the answer (the same keys as a mock) from `{ method, url, headers, rawHeaders, body }`. It may be async. For the transform and polling, the harness calls back into Node for it.
+- `delayMs` delays the whole answer; `bodyDelayMs` sends the headers at once and the body after the delay (a slow server). `error: 'reset'` drops the connection.
 - Mocks apply to the transform (through an HTTPS proxy with its own CA, so they work with any library that honours `HTTP(S)_PROXY`), to polling, and to the browser.
 - A server-side request with no mock gets status 599 and is reported by `toRenderCleanly`. Unmocked browser requests (images) are fetched and cached.
-- Every request is recorded: `method`, `url`, `headers`, `body`, `mocked`, `status`, `via`.
+- Every request is recorded: `method`, `url`, `headers` (by lower-case name), `rawHeaders` (`[name, value]` as sent), `body`, `mocked`, `status`, `error` (`'reset'`), `via`.
+- The page's own framework files never pass through mocks, so a catch-all mock (`url: '*'`) only answers the plugin's requests.
 
 ### 5.8 Sessions
 
@@ -178,17 +182,17 @@ mocks: { 'https://api.example.com/x': { temp: 21 } }   // plain value = json; st
 
 - `webhook(body, { limit })` stores data using the merge strategy and returns `{ status, data, transform?, error? }`.
 - On a **webhook plugin with a transform**, the transform runs when data arrives, and its output is stored in place of the data. Later `render()` calls show the stored output and do not run the transform, so settings changes do not apply until the next post.
-- `trmnl_state` carries over between `transform()` and `render()` calls.
+- `trmnl_state` carries over between `transform()` and `render()` calls, and so do the stored merge variables (the next transform's `trmnl.previous_merge_variables`; for a webhook plugin, the stored set after the merge strategy).
 - `session.webhookData` and `session.state` can be read.
 
 ## 6. Rendering
 
 ### 6.1 Pipeline
 
-1. The harness (Ruby, one per worker) assembles the data, runs the transform, and renders `shared.liquid` + `<view>.liquid` with trmnlp's Liquid environment, including `custom_filters` from `.trmnlp.yml`. Liquid's `now` is frozen. `strictVariables: true` collects undefined variables as warnings.
+1. The harness (Ruby, one per worker) assembles the data, runs the transform, and renders `shared.liquid` + `<view>.liquid` with trmnlp's Liquid environment, including `custom_filters` from `.trmnlp.yml`. Liquid's `now` is frozen. `strictVariables: true` collects undefined variables as warnings. Parsed templates are kept (the last 64, by source), since parsing a large template costs more than rendering it.
 2. The page is built (section 6.3) and served by a local HTTP server.
 3. The page loads in an iframe of a long-lived host page (one per worker and device scale), sized to the device. The framework's files are cached by the browser, so the stylesheet is parsed once per worker.
-4. The browser clock is fixed at `now`. The render waits for `load`, `document.fonts.ready`, two animation frames and `settleMs` (default 100).
+4. The browser clock is fixed at `now`. The render waits for `load`, `document.fonts.ready`, two animation frames, `waitFor` if given, and `settleMs` (default 100, or 0 with `waitFor`).
 5. `--pixel-ratio` is set to the model's ratio (TRMNL keeps it at 1 during layout and applies it at capture), followed by two more frames.
 6. The `Screen` is returned. Its picture is taken on demand.
 
@@ -219,7 +223,11 @@ mocks: { 'https://api.example.com/x': { temp: 21 } }   // plain value = json; st
 | `trmnlpYml` | `true` | Use `.trmnlp.yml`'s fields and variables. |
 | `after` | none | Data merged after the transform, before Liquid. |
 | `head` | none | Extra HTML in `<head>`. |
-| `settleMs` | `100` | Extra wait after load. |
+| `waitFor` | none | The plugin's sign that it is done: a selector that appears, or a predicate run in the page (`waitForArg`, `waitForTimeoutMs`). |
+| `settleMs` | `100` (`0` with `waitFor`) | Extra wait after load. |
+| `slotSize` | none | `{ width, height }`: the view as a slot of that size (not a TRMNL layout). |
+| `fieldDefaults` | `true` | `false` leaves out the `settings.yml` defaults. |
+| `previousMergeVariables` | `{}` | The transform's `trmnl.previous_merge_variables`. |
 | `offline` | `false` | Never fetch uncached external files. |
 | `deviceScale` | `1` | Browser device scale factor (an extra zoom on the picture). |
 | `note` | none | Text added to the report label. |

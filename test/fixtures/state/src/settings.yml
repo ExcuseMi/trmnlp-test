@@ -1,0 +1,10 @@
+name: State
+strategy: polling
+framework_version: 3.4.0
+serverless_language: node
+polling_url: 'https://api.example.com/readings?since={{ trmnl.state.seen | default: 0 }}'
+custom_fields:
+  - keyname: mode
+    field_type: string
+    name: Mode
+    default: normal

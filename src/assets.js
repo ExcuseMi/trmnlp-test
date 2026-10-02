@@ -58,9 +58,17 @@ async function cachedFetch(url, { offline }) {
 async function handleExternal(route, ctx, assetHost = 'https://trmnl.com') {
   const req = route.request();
   const url = req.url();
-  const mock = matchMock(ctx.mocks, req.method(), url);
+  let mock = matchMock(ctx.mocks, req.method(), url);
   if (mock) {
-    ctx.requests.push({ method: req.method(), url, mocked: true, via: 'browser', status: mock.status || 200 });
+    const request = { method: req.method(), url, headers: req.headers(), body: req.postData() };
+    if (typeof mock.respond === 'function') mock = { ...(await mock.respond(request)) };
+    const wait = (mock.delayMs || 0) + (mock.bodyDelayMs || 0);
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    if (mock.error === 'reset') {
+      ctx.requests.push({ ...request, mocked: true, via: 'browser', status: null, error: 'reset' });
+      return route.abort('connectionreset');
+    }
+    ctx.requests.push({ ...request, mocked: true, via: 'browser', status: mock.status || 200 });
     const { body, contentType } = mockBody(mock);
     return route.fulfill({ status: mock.status || 200, headers: mock.headers, contentType, body });
   }

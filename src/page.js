@@ -42,7 +42,7 @@ function escapeAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '
 // The page as TRMNL's preview writes it: the framework's release files (plugins.min.css, the JS
 // imported as a module), every theme stylesheet from 3.2 on (a theme is then just its class), and
 // the screen inside a "trmnl environment" wrapper with an empty style.
-function buildPage({ markup, view, framework, classes, slot = 0, theme, head = '', bare = false }) {
+function buildPage({ markup, view, framework, classes, slot = 0, slotSize, theme, head = '', bare = false }) {
   oneOf('view', view, VIEWS);
   if (theme && FRAMEWORK.compare(framework, '3.2.0') < 0) throw new Error(`themes need framework 3.2.0 or later (got ${framework})`);
   const mashup = MASHUPS[view];
@@ -53,6 +53,8 @@ function buildPage({ markup, view, framework, classes, slot = 0, theme, head = '
     for (let i = 0; i < mashup.slots; i++) views.push(i === slot ? ours : `<div class="view view--${view}"></div>`);
     body = `<div class="${mashup.classes}">${views.join('')}</div>`;
   }
+  // a slot of any size (not a TRMNL layout): the framework sizes a view from --full-w/--full-h
+  if (slotSize) head += `<style>.screen{--full-w:${Number(slotSize.width)}px !important;--full-h:${Number(slotSize.height)}px !important}</style>`;
   const themes = !bare && FRAMEWORK.compare(framework, '3.2.0') >= 0
     ? [...THEMES].sort().map((t) => `<link rel="stylesheet" href="/css/${framework}/themes/${t}-theme.css">`).join('\n    ') : '';
   return `<!DOCTYPE html>

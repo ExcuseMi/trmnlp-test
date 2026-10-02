@@ -48,9 +48,12 @@ Effects:
 - `polling_url` / `polling_headers` are included for webhook plugins. TRMNL doesn't send them there.
 - Device defaults look dated next to a real device: `firmware_version` `1.6.3` against `1.8.16`.
 
-## 5. `trmnl_state` doesn't round-trip
+## 5. Saved state and previous merge variables (help.trmnl.com, "Saved State")
 
-`transform_input` slices `trmnl` to `user`, `device`, `plugin_settings`, so a transform never receives `trmnl.state`. TRMNL passes the `trmnl_state` a transform returned back as `input.trmnl.state` on the next run. Plugins rely on it (for example ETag caches), and they can't be developed locally.
+- `transform_input` slices `trmnl` to `user`, `device`, `plugin_settings`, so a transform never receives `trmnl.state` or `trmnl.previous_merge_variables`. TRMNL passes both: the state the last run wrote, and the merge variables the last run stored. Plugins rely on them (ETag caches, replaying a failed feed), and they can't be developed locally.
+- The polling URL, headers and body can use `{{ trmnl.state.cursor }}` on TRMNL; trmnlp renders them with the custom fields only.
+- TRMNL's state rules: `trmnl_state` must be an object of at most 8192 bytes, otherwise the write is ignored and the last state kept; after a failed fetch the write is skipped. trmnlp has no saved state, so none of this can be tried locally.
+- Timing: the polling URL and the transform see the previous run's state, and the markup sees what the transform wrote in this run.
 
 ## 6. Webhooks
 

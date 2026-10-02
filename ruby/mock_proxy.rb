@@ -87,7 +87,11 @@ module TrmnlpTest
   class MockTable
     attr_reader :requests
 
-    def initialize(mocks, network)
+    attr_reader :callback
+
+    # callback: answers a computed mock (one with 'dynamic', its respond function lives in Node)
+    def initialize(mocks, network, callback: nil)
+      @callback = callback
       @mocks = (mocks || []).map { |m| m.merge('used' => 0) }
       @network = network || 'mock'
       @requests = []
@@ -135,6 +139,14 @@ module TrmnlpTest
   # Turns a mock into [status, headers, body].
   module MockResponse
     module_function
+
+    # A computed mock asks Node for its answer, with the request; the answer has the shape of a mock.
+    def resolve(mock, table, request)
+      return mock unless mock['dynamic']
+
+      answer = table.callback.call(mock['dynamic'], request) || {}
+      answer.merge('dynamic' => nil)
+    end
 
     def build(mock)
       headers = (mock['headers'] || {}).dup
@@ -193,12 +205,12 @@ module TrmnlpTest
       return unless line
 
       method, target, = line.split(' ')
-      headers = read_headers(sock)
+      headers, raw = read_headers(sock)
       if method == 'CONNECT'
         connect(sock, target)
       else
         body = read_body(sock, headers)
-        respond(sock, method, target, headers, body)
+        respond(sock, method, target, headers, body, raw)
       end
     rescue StandardError => e
       warn "trmnlp-test proxy: #{e.class}: #{e.message}"
@@ -220,10 +232,10 @@ module TrmnlpTest
       return unless line
 
       method, path, = line.split(' ')
-      headers = read_headers(ssl)
+      headers, raw = read_headers(ssl)
       body = read_body(ssl, headers)
       url = "https://#{host}#{port.to_i == 443 ? '' : ":#{port}"}#{path}"
-      respond(ssl, method, url, headers, body)
+      respond(ssl, method, url, headers, body, raw)
       ssl.close rescue nil
     end
 
@@ -236,22 +248,24 @@ module TrmnlpTest
       b.close rescue nil
     end
 
-    def respond(io, method, url, headers, body)
+    def respond(io, method, url, headers, body, raw = [])
+      entry = { 'method' => method, 'url' => url, 'headers' => headers, 'rawHeaders' => raw, 'body' => body }
       mock = @table.find(method, url)
-      status, resp_headers, resp_body =
-        if mock
-          sleep(mock['delayMs'] / 1000.0) if mock['delayMs']
-          return if mock['error'] == 'reset'
-
-          MockResponse.build(mock)
-        elsif @table.live?
-          forward(method, url, headers, body)
-        else
-          MockResponse.unmocked(method, url)
+      mock = MockResponse.resolve(mock, @table, entry.dup) if mock
+      if mock
+        sleep(mock['delayMs'] / 1000.0) if mock['delayMs']
+        if mock['error'] == 'reset'
+          @table.record(entry.merge('mocked' => true, 'status' => nil, 'error' => 'reset'))
+          return
         end
-      @table.record('method' => method, 'url' => url, 'headers' => headers, 'body' => body,
-                    'mocked' => !mock.nil?, 'status' => status)
-      write_response(io, status, resp_headers, resp_body)
+        status, resp_headers, resp_body = MockResponse.build(mock)
+      elsif @table.live?
+        status, resp_headers, resp_body = forward(method, url, headers, body)
+      else
+        status, resp_headers, resp_body = MockResponse.unmocked(method, url)
+      end
+      @table.record(entry.merge('mocked' => !mock.nil?, 'status' => status))
+      write_response(io, status, resp_headers, resp_body, body_delay: mock && mock['bodyDelayMs'])
     end
 
     def forward(method, url, headers, body)
@@ -267,24 +281,35 @@ module TrmnlpTest
       [502, { 'content-type' => 'text/plain' }, "trmnlp-test: live request failed: #{e.message}"]
     end
 
-    def write_response(io, status, headers, body)
+    # body_delay: the headers go out at once, the body after that many ms (a slow server)
+    def write_response(io, status, headers, body, body_delay: nil)
       body = body.b
       out = +"HTTP/1.1 #{status} #{status_text(status)}\r\n"
       headers.each { |k, v| out << "#{k}: #{v}\r\n" }
       out << "content-length: #{body.bytesize}\r\nconnection: close\r\n\r\n"
-      io.write(out.b + body)
+      if body_delay
+        io.write(out.b)
+        io.flush
+        sleep(body_delay / 1000.0)
+        io.write(body)
+      else
+        io.write(out.b + body)
+      end
       io.flush
     end
 
     def status_text(status) = Net::HTTPResponse::CODE_TO_OBJ[status.to_s]&.name&.sub('Net::HTTP', '') || 'Status'
 
+    # => [headers by lower-case name (HTTP names are case-insensitive), [[name, value]] as sent]
     def read_headers(io)
       headers = {}
+      raw = []
       while (line = io.gets) && line != "\r\n" && line != "\n"
         k, v = line.split(':', 2)
+        raw << [k.strip, v.to_s.strip]
         headers[k.strip.downcase] = v.to_s.strip
       end
-      headers
+      [headers, raw]
     end
 
     def read_body(io, headers)

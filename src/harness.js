@@ -10,6 +10,9 @@ class Harness {
   constructor() {
     this.pending = new Map();
     this.nextId = 1;
+    // computed mocks: respond functions by id, called when the harness asks
+    this.callbacks = new Map();
+    this.nextCallback = 1;
     this.stderr = '';
   }
 
@@ -38,6 +41,7 @@ class Harness {
         let msg;
         try { msg = JSON.parse(line); } catch { return; }
         if (msg.ready) { this.trmnlpVersion = msg.trmnlp; resolve(this); return; }
+        if (msg.callback) { this.answer(msg); return; }
         const p = this.pending.get(msg.id);
         if (!p) return;
         this.pending.delete(msg.id);
@@ -55,6 +59,26 @@ class Harness {
       this.pending.set(id, { resolve, reject });
       this.proc.stdin.write(JSON.stringify({ id, op, ...payload }) + '\n');
     });
+  }
+
+  // a function the harness can call by id while a request runs
+  register(fn) {
+    const id = `f${this.nextCallback++}`;
+    this.callbacks.set(id, fn);
+    return id;
+  }
+
+  release(ids) { for (const id of ids) this.callbacks.delete(id); }
+
+  async answer({ callback, cid, request }) {
+    let response;
+    try {
+      const fn = this.callbacks.get(callback);
+      response = fn ? await fn(request) : { status: 500, body: `trmnlp-test: no computed mock ${callback}` };
+    } catch (e) {
+      response = { status: 500, body: `trmnlp-test: the computed mock threw: ${e.message}` };
+    }
+    this.proc.stdin.write(JSON.stringify({ callbackReply: cid, response: response || {} }) + '\n');
   }
 
   stop() {

@@ -19,6 +19,11 @@ class TransformResult {
     this.maxRssMb = t.maxRssMb;
     this.exitCode = t.exitCode;
     this.state = run.nextState;
+    this.stateError = run.stateError || null;
+    this.stateSkipped = run.stateSkipped || null;
+    this.fetchFailed = !!run.fetchFailed;
+    this.stored = run.stored;
+    this.cached = !!t.cached;
     this.data = run.data;
     this.mergeVariables = run.mergeVariables;
     this.polling = run.polling;
@@ -241,6 +246,7 @@ class Screen {
     const p = [];
     if (this.liquidError) p.push(`Liquid: ${this.liquidError}`);
     if (this.transform.error) p.push(`transform (${this.transform.language}): ${this.transform.error}`);
+    if (this.transform.stateError) p.push(this.transform.stateError);
     for (const e of this.pageErrors) p.push(`page error: ${e}`);
     for (const e of this.consoleErrors) p.push(`console.error: ${e}`);
     for (const w of this.liquidWarnings || []) p.push(`Liquid strict: ${w}`);
