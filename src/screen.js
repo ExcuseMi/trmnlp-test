@@ -244,6 +244,7 @@ class Screen {
     for (const e of this.pageErrors) p.push(`page error: ${e}`);
     for (const e of this.consoleErrors) p.push(`console.error: ${e}`);
     for (const w of this.liquidWarnings || []) p.push(`Liquid strict: ${w}`);
+    for (const c of this.checkProblems || []) p.push(c);
     for (const u of this.missingAssets) p.push(`failed to load ${u}`);
     for (const r of this.transform.requests) {
       if (!r.mocked && r.status === 599) p.push(`unmocked ${r.via === 'polling' ? 'polling' : 'transform'} request: ${r.method} ${r.url} (add it to mocks, or network: 'live')`);

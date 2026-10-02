@@ -12,6 +12,7 @@
 //     timeoutMs: 5000,
 //   },
 //   screenshots: 'always',            // attach device pictures: 'always' | 'on-failure' | 'never'
+//   checks: ['test/trmnl/checks.js'], // run after every render; their problems fail toRenderCleanly
 //   workers: 4,                     // or '50%'; TRMNLP_TEST_WORKERS and --workers override it
 //   retries: 0,
 // };

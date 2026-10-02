@@ -10,6 +10,38 @@ const { Screen, TransformResult } = require('./screen');
 
 const infoCache = new Map();
 
+// Checks from the config's `checks`: modules exporting a function, or an object of named
+// functions, `async (screen) => problem(s)`. They run after every render; what they return
+// (a string, a list of strings, or nothing) joins the screen's problems.
+let loadedChecks = null;
+function checksOf(config) {
+  if (loadedChecks) return loadedChecks;
+  loadedChecks = [];
+  for (const file of config.checks || []) {
+    const mod = require(path.resolve(config.root || '.', file));
+    const named = typeof mod === 'function' ? { [mod.name || path.basename(file, '.js')]: mod } : mod;
+    for (const [name, fn] of Object.entries(named)) {
+      if (typeof fn !== 'function') throw new Error(`checks: ${file} exports ${name}, which is not a function`);
+      loadedChecks.push({ name, fn });
+    }
+  }
+  return loadedChecks;
+}
+
+async function runChecks(screen, config, opts) {
+  if (opts.checks === false) return;
+  const only = Array.isArray(opts.checks) ? opts.checks : null;
+  for (const { name, fn } of checksOf(config)) {
+    if (only && !only.includes(name)) continue;
+    try {
+      const found = await fn(screen);
+      for (const p of [].concat(found || [])) screen.checkProblems.push(`${name}: ${p}`);
+    } catch (e) {
+      screen.checkProblems.push(`${name}: the check failed: ${e.message}`);
+    }
+  }
+}
+
 function toSeconds(now) {
   if (now == null) return Date.now() / 1000;
   if (now instanceof Date) return now.getTime() / 1000;
@@ -125,9 +157,10 @@ class Trmnl {
       html, markup: rendered.markup, liquidError: rendered.error, liquidWarnings: rendered.warnings || [],
       data: run.data, mergeVariables: run.mergeVariables, customFields: run.customFields, transform: new TransformResult(run),
       state: run.nextState, polling: run.polling, ...shown,
-      device, view, framework, classes, darkMode, label, options: o, now,
+      device, view, framework, classes, darkMode, label, options: o, now, checkProblems: [],
     });
     this.screens.push(screen);
+    await runChecks(screen, this.config, o);
     return screen;
   }
 
@@ -174,9 +207,10 @@ class Trmnl {
     const label = [device.model.name, view, 'markup', o.bare && 'bare', o.deviceScale && `x${o.deviceScale}`, o.note].filter(Boolean).join(' · ');
     const screen = new Screen({
       html, markup, liquidError: null, liquidWarnings: [], data: {}, transform: new TransformResult({}), ...shown,
-      device, view, framework, classes, darkMode, label, options: o, now, testTitle: this.testInfo.title,
+      device, view, framework, classes, darkMode, label, options: o, now, testTitle: this.testInfo.title, checkProblems: [],
     });
     this.screens.push(screen);
+    await runChecks(screen, this.config, o);
     return screen;
   }
 

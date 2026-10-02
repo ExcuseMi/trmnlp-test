@@ -28,6 +28,10 @@ module.exports = {
 
   screenshots: 'always', // device pictures in the report: always | on-failure | never
 
+  // your own checks, run after every render (see docs/SPEC.md, "Extending"):
+  // each module exports async (screen) => problem string(s); toRenderCleanly reports them
+  // checks: ['test/trmnl/checks.js'],
+
   // parallel test workers (each runs its own harness and browser): a number or '50%' of the CPUs.
   // Default: half the CPUs. Overridden by TRMNLP_TEST_WORKERS, and that by --workers / -j.
   // workers: 4,

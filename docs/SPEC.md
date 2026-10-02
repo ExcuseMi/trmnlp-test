@@ -1,6 +1,6 @@
 # trmnlp-test specification
 
-Version 0.1.13. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
+Version 0.1.14. This describes what trmnlp-test does and guarantees. [README.md](../README.md) is the short introduction, and [README.md](README.md) in this folder has the diagrams.
 
 ## 1. Purpose
 
@@ -78,6 +78,7 @@ The file is looked up at `trmnlp-test.config.js`, `trmnlp-test.config.cjs` or `t
 | `serverless.timeoutMs` | `5000` | Transform timeout. |
 | `qr` | `'server'` | Default `qr_code` mode (section 7.6). |
 | `screenshots` | `'always'` | Device pictures in the report: `always`, `on-failure` or `never`. |
+| `checks` | `[]` | Check modules run after every render (section 9.1). |
 | `workers` | half the CPUs | Number, or a share such as `'50%'`. |
 | `retries`, `timeout` | `0`, `60000` | Playwright retries and per-test timeout (ms). |
 
@@ -222,6 +223,7 @@ mocks: { 'https://api.example.com/x': { temp: 21 } }   // plain value = json; st
 | `offline` | `false` | Never fetch uncached external files. |
 | `deviceScale` | `1` | Browser device scale factor (an extra zoom on the picture). |
 | `note` | none | Text added to the report label. |
+| `checks` | all | `false` skips the configured checks for this render; a list of names runs only those. |
 
 ### 6.3 The page
 
@@ -374,6 +376,49 @@ The fields of section 5.5, plus `data`, `mergeVariables`, `polling`, `state`, an
 | `toHaveRequested(pattern, { method, times, headers, body })` | Matching requests were made (exactly `times`, if given). |
 | `toTransformCleanly()` | The transform ran without error. |
 | `toPassLint({ allow })` | `trmnlp lint` reports no issues outside `allow`. |
+
+### 9.1 Extending
+
+trmnlp-test is extended with plain Playwright and Node, so additions work the same way as the built-ins.
+
+**Matchers and fixtures.** `expect.extend` adds matchers, and `test.extend` adds fixtures. A helper module re-exports them, and specs require it instead of `trmnlp-test`:
+
+```js
+// test/trmnl/helpers.js
+const { test: base, expect: baseExpect } = require('trmnlp-test');
+
+const expect = baseExpect.extend({
+  async toHaveTemperature(screen, value) {
+    const text = await screen.locator('[data-temp]').innerText();
+    return { pass: text === String(value), message: () => `${screen.label}: temperature ${text}, expected ${value}` };
+  },
+});
+
+const test = base.extend({
+  sensor: async ({ trmnl }, use) => use((t) => trmnl.render({ webhook: { sensor: { temperature: t } } })),
+});
+
+module.exports = { test, expect };
+```
+
+A matcher receives the whole `Screen` (section 8.2): the page, the picture, the data, the transform and the requests.
+
+**Checks after every render.** For rules that should hold on every render of a plugin. Modules listed in the config's `checks` export a function, or an object of named functions, `async (screen) => problem | problem[] | null`:
+
+```js
+// test/trmnl/checks.js
+exports.minimumTextSize = async (screen) => {
+  const small = await screen.page.evaluate(() => [...document.querySelectorAll('.view *')]
+    .filter((e) => e.childElementCount === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 12)
+    .map((e) => e.textContent.trim().slice(0, 30)));
+  return small.map((t) => `text below 12 px: "${t}"`);
+};
+```
+
+- Checks run after each `render` and `renderMarkup`, in the order of the config.
+- Their problems are stored in `screen.checkProblems`, prefixed with the check's name, and reported by `toRenderCleanly` and in the gallery.
+- A check that throws becomes a problem itself.
+- A render can opt out with `checks: false`, or run only some with `checks: ['name']`. `toRenderCleanly({ allow: ['name:'] })` accepts a check's problems in one test.
 
 ## 10. Reports
 

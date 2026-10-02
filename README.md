@@ -113,6 +113,8 @@ for (const s of matrix({ device: DEVICES.representative, view: VIEWS, darkMode: 
 }
 ```
 
+**Extending:** add matchers with `expect.extend` and fixtures with `test.extend` (Playwright's own mechanisms), and plugin-wide rules with `checks: ['test/trmnl/checks.js']` in the config. Checks run after every render, and `toRenderCleanly` reports their problems. See [docs/SPEC.md](docs/SPEC.md#91-extending).
+
 Other helpers: `trmnl.plugin('other/dir')`, `trmnl.lint()` with `toPassLint({ allow })`, `FRAMEWORK.majors()`, `FRAMEWORK.latestOf('2')`.
 
 ## How it works
