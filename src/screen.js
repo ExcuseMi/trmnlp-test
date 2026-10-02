@@ -60,10 +60,21 @@ class Screen {
     return this._png[key];
   }
 
-  async qr(rect) {
+  // The QR code in the picture and its polarity: { text, inverted } (text null: none found).
+  // A code is tried as drawn first, then inverted (white on black, e.g. after dark mode).
+  async qrInfo(rect) {
     // decode the undithered picture: dither noise around modules only ever hurts a scanner
-    const codes = (await this.png({ dither: false })).decodeQr(rect);
-    return codes.length ? codes[0] : null;
+    const png = await this.png({ dither: false });
+    const normal = png.decodeQr(rect);
+    if (normal.length) return { text: normal[0], inverted: false };
+    const inverted = png.inverted().decodeQr(rect);
+    return inverted.length ? { text: inverted[0], inverted: true } : { text: null, inverted: null };
+  }
+
+  // the decoded text of a black-on-white code ({ inverted: true }: white on black, 'any': either)
+  async qr(rect, { inverted = false } = {}) {
+    const info = await this.qrInfo(rect);
+    return info.text != null && (inverted === 'any' || inverted === info.inverted) ? info.text : null;
   }
 
   async box(selector) {

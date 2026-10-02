@@ -73,3 +73,21 @@ test.describe('dark mode', () => {
     expect(p).toMatchObject({ bg: 0, svgMargin: 0, svgSquare: 255, imgMargin: 0, imgSquare: 255, classMargin: 255 });
   });
 });
+
+test.describe('QR polarity', () => {
+  // the fixture's inline svg and <img> both hold a black-on-white code once qr_code draws one
+  test('a code inverted by dark mode is found, reported, and refused unless asked for', async ({ trmnl }) => {
+    const plugin = trmnl.plugin('../fixtures/quirks');
+    const light = await plugin.render();
+    expect(await light.qrInfo()).toEqual({ text: 'hello', inverted: false });
+    await expect(light).toHaveQr('hello');
+
+    const dark = await plugin.render({ darkMode: true });
+    expect(await dark.qrInfo()).toEqual({ text: 'hello', inverted: true });
+    await expect(dark).not.toHaveQr('hello');
+    await expect(dark).toHaveQr('hello', { inverted: true });
+    await expect(dark).toHaveQr('hello', { inverted: 'any' });
+    expect(await dark.qr()).toBeNull();
+    expect(await dark.qr(undefined, { inverted: 'any' })).toBe('hello');
+  });
+});

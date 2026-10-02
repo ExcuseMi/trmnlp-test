@@ -1,6 +1,6 @@
 {
   "name": "trmnlp-test",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Test framework for TRMNL plugins: trmnlp projects, serverless transforms, webhooks, every device model and framework version",
   "main": "src/index.js",
   "bin": { "trmnlp-test": "src/cli.js" },

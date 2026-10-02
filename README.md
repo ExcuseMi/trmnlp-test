@@ -85,7 +85,7 @@ test('menu', async ({ trmnl }) => {
   await expect(screen).toHaveNoOverflow();
   await expect(screen).toHaveNoOverlap('.title', 'img');
   await expect(screen).toShowText('Espresso');              // visible: not cut off by an ellipsis, clamp or the edge ({ visible: false }: content only)
-  await expect(screen).toHaveQr('BCD\n002...');
+  await expect(screen).toHaveQr('BCD\n002...');             // black on white; { inverted: true | 'any' } for dark codes
   await expect(screen).toMatchScreen();                     // PNG snapshot (--update-snapshots)
   await expect(screen).toFitDeviceImageLimit();
   const png = await screen.png();                           // pixel(x,y), colors(), inkRatio(rect), inkBounds(), crop()

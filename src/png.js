@@ -124,6 +124,14 @@ class Png {
     return x1 < 0 ? null : { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
   }
 
+  // the picture with every colour inverted (white on black <-> black on white)
+  inverted() {
+    const out = new PNG({ width: this.width, height: this.height });
+    const d = this.png.data;
+    for (let i = 0; i < d.length; i += 4) { out.data[i] = 255 - d[i]; out.data[i + 1] = 255 - d[i + 1]; out.data[i + 2] = 255 - d[i + 2]; out.data[i + 3] = d[i + 3]; }
+    return new Png(out, { palette: this.palette, model: this.model });
+  }
+
   // every QR code / barcode zbar finds, as text
   decodeQr(r) {
     const img = r ? this.crop(r) : this;

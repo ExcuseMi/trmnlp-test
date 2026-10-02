@@ -41,10 +41,17 @@ const matchers = {
   },
 
   // the QR code in the device picture decodes to `expected` (null: no QR at all)
-  async toHaveQr(screen, expected, { rect } = {}) {
-    const got = await screen.qr(rect);
+  // Many scanners (banking apps among them) cannot read a white-on-black code, so by default the
+  // code must be black on white; { inverted: true } expects white on black, 'any' accepts either.
+  async toHaveQr(screen, expected, { rect, inverted = false } = {}) {
+    const info = await screen.qrInfo(rect);
+    const accepted = info.text != null && (inverted === 'any' || inverted === info.inverted);
+    const got = accepted ? info.text : null;
     const pass = expected instanceof RegExp ? got != null && expected.test(got) : got === expected;
-    return result(pass, `${screen.label}: QR decodes to ${JSON.stringify(got)}, expected ${expected instanceof RegExp ? expected : JSON.stringify(expected)}`);
+    const polarity = info.text == null ? 'no QR code found'
+      : `QR decodes to ${JSON.stringify(info.text)}, ${info.inverted ? 'only when inverted (white on black)' : 'black on white'}`;
+    const want = inverted === 'any' ? '' : inverted ? ', white on black' : ', black on white';
+    return result(pass, `${screen.label}: ${polarity}; expected ${expected instanceof RegExp ? expected : JSON.stringify(expected)}${expected === null ? '' : want}`);
   },
 
   // PNG snapshot of the device picture; --update-snapshots writes it
