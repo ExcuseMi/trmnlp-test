@@ -33,7 +33,7 @@ From a clone, `bin/trmnlp-test` builds the image from source on the newest trmnl
 
 ## Release
 
-Pushing to `main`, and a daily check for a new trmnlp release, publish the image as `:latest` and `:trmnlp-X.Y.Z`. Pushing a tag `vX.Y.Z` (matching `lib/trmnlp_test/version.rb`) runs the self-tests, publishes `:X.Y.Z` and pushes the gem when the `RUBYGEMS_API_KEY` secret is set.
+Pushing to `main`, and a daily check for a new trmnlp release, publish the image as `:latest` and `:trmnlp-X.Y.Z`. Pushing a tag `vX.Y.Z` (matching `lib/trmnlp_test/version.rb`) runs the self-tests, publishes `:X.Y.Z` and pushes the gem through rubygems.org trusted publishing (no stored key).
 
 ## Config: `trmnlp-test.config.js`
 

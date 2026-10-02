@@ -1,7 +1,7 @@
 name: release
 # Always built on the newest trmnlp release, self-tested before anything is pushed.
 # main and the daily schedule -> image :latest + :trmnlp-<version> (schedule: only when trmnlp moved).
-# Tag vX.Y.Z -> image :X.Y.Z and the gem (if RUBYGEMS_API_KEY is set).
+# Tag vX.Y.Z -> image :X.Y.Z and the gem (trusted publishing from rubygems.org).
 on:
   push:
     branches: [main]
@@ -76,15 +76,16 @@ jobs:
     needs: image
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # trusted publishing: rubygems.org trusts this workflow, no stored API key
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+      - uses: rubygems/configure-rubygems-credentials@v1.0.0
       - name: build and push
-        env:
-          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
         run: |
           gem build trmnlp-test.gemspec
-          if [ -z "$GEM_HOST_API_KEY" ]; then echo "RUBYGEMS_API_KEY not set: gem built, not pushed"; exit 0; fi
           gem push trmnlp-test-*.gem
