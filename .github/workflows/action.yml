@@ -1,0 +1,17 @@
+name: action
+# The GitHub Action as a plugin repository uses it, on the payment-qr example.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          directory: examples/payment-qr
+          artifact: payment-qr-report

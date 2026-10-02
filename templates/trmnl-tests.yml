@@ -1,0 +1,15 @@
+name: trmnl tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # runs trmnlp-test: summary on the run page, annotations on failing tests,
+      # the report with every device picture as the "trmnl-report" artifact
+      - uses: ExcuseMi/trmnlp-test@v0
+        # with:
+        #   args: --workers 2

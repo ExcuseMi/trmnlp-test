@@ -75,7 +75,8 @@ function playwrightConfig(cfg) {
     retries: cfg.retries || 0,
     // TRMNLP_TEST_WORKERS > config workers > Playwright's default (half the CPUs); --workers/-j wins over all
     ...((process.env.TRMNLP_TEST_WORKERS || cfg.workers) && { workers: workersValue(process.env.TRMNLP_TEST_WORKERS || cfg.workers) }),
-    reporter: [['list'], ['html', { outputFolder: path.join(report, 'html'), open: 'never' }],
+    // in CI also the github reporter: annotations at the failing lines
+    reporter: [['list'], ...(process.env.CI ? [['github']] : []), ['html', { outputFolder: path.join(report, 'html'), open: 'never' }],
       [path.join(__dirname, 'gallery-reporter.js'), { outputFolder: report }]],
     use: { headless: true, launchOptions: { args: ['--font-render-hinting=none', '--disable-lcd-text'] } },
   };
@@ -125,6 +126,7 @@ function init() {
   };
   write('trmnlp-test.config.js', fs.readFileSync(path.join(__dirname, '..', 'templates', 'trmnlp-test.config.js'), 'utf8').replace("plugin: 'plugin'", `plugin: '${cfg.plugin}'`));
   write(path.join(cfg.tests, 'plugin.spec.js'), fs.readFileSync(path.join(__dirname, '..', 'templates', 'plugin.spec.js'), 'utf8'));
+  write('.github/workflows/trmnl-tests.yml', fs.readFileSync(path.join(__dirname, '..', 'templates', 'trmnl-tests.yml'), 'utf8'));
   const gi = path.join(root, '.gitignore');
   const ignore = `${cfg.report}/\n`;
   if (!fs.existsSync(gi) || !fs.readFileSync(gi, 'utf8').includes(cfg.report)) fs.appendFileSync(gi, ignore);

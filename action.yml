@@ -1,0 +1,54 @@
+name: trmnlp-test
+description: Test a TRMNL plugin with trmnlp-test (Docker), with a summary, annotations and the report as an artifact
+branding:
+  icon: monitor
+  color: gray-dark
+inputs:
+  directory:
+    description: The plugin repository directory to test
+    default: .
+  args:
+    description: Extra arguments, e.g. -g "dark" or --workers 2
+    default: ''
+  report:
+    description: Report directory, relative to directory
+    default: test/trmnl-report
+  version:
+    description: trmnlp-test gem version (default the newest)
+    default: ''
+  artifact:
+    description: Name of the uploaded report artifact ('' to skip)
+    default: trmnl-report
+runs:
+  using: composite
+  steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.4'
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/trmnlp-test
+        key: trmnlp-test-${{ runner.os }}-${{ hashFiles(format('{0}/trmnlp-test.config.js', inputs.directory)) }}
+        restore-keys: trmnlp-test-${{ runner.os }}-
+    - name: install
+      shell: bash
+      run: gem install --no-document trmnlp-test ${{ inputs.version && format('-v {0}', inputs.version) || '' }}
+    - name: test
+      id: test
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      run: |
+        set +e
+        trmnlp-test run --report "${{ inputs.report }}" ${{ inputs.args }}
+        code=$?
+        if [ -f "${{ inputs.report }}/summary.md" ]; then cat "${{ inputs.report }}/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@v4
+      if: always() && inputs.artifact != ''
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ inputs.directory }}/${{ inputs.report }}
+        if-no-files-found: ignore
+    - name: result
+      shell: bash
+      run: exit ${{ steps.test.outputs.code }}

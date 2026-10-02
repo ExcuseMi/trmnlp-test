@@ -1,7 +1,7 @@
 name: release
 # Always built on the newest trmnlp release, self-tested before anything is pushed.
 # main and the daily schedule -> image :latest + :trmnlp-<version> (schedule: only when trmnlp moved).
-# Tag vX.Y.Z -> image :X.Y.Z and the gem (trusted publishing from rubygems.org).
+# Tag vX.Y.Z -> image :X.Y.Z, the gem (trusted publishing from rubygems.org) and the action's v0 tag.
 on:
   push:
     branches: [main]
@@ -77,7 +77,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # move the v0 tag
       id-token: write # trusted publishing: rubygems.org trusts this workflow, no stored API key
     steps:
       - uses: actions/checkout@v4
@@ -89,3 +89,7 @@ jobs:
         run: |
           gem build trmnlp-test.gemspec
           gem push trmnlp-test-*.gem
+      - name: move the v0 tag (uses ExcuseMi/trmnlp-test@v0)
+        run: |
+          git tag -f v0 "$GITHUB_SHA"
+          git push -f origin v0

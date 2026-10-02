@@ -36,6 +36,23 @@ From a clone, `bin/trmnlp-test` builds the image from source on the newest trmnl
 
 Pushing to `main`, and a daily check for a new trmnlp release, publish the image as `:latest` and `:trmnlp-X.Y.Z`. Pushing a tag `vX.Y.Z` (matching `lib/trmnlp_test/version.rb`) runs the self-tests, publishes `:X.Y.Z` and pushes the gem through rubygems.org trusted publishing (no stored key).
 
+## GitHub Actions
+
+```yaml
+# .github/workflows/trmnl-tests.yml (trmnlp-test init writes it)
+name: trmnl tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ExcuseMi/trmnlp-test@v0
+        # with: { args: '--workers 2', directory: '.', report: 'test/trmnl-report', version: '', artifact: 'trmnl-report' }
+```
+
+It installs the gem, caches `~/.cache/trmnlp-test`, runs the tests, writes a summary on the run page, adds annotations at the failing lines, and uploads the report with every device picture as the `trmnl-report` artifact. Commit PNG snapshots (`__screens__/`) so `toMatchScreen` has something to compare against.
+
 ## Config: `trmnlp-test.config.js`
 
 See [templates/trmnlp-test.config.js](templates/trmnlp-test.config.js). Transform dependencies:

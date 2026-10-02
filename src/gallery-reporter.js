@@ -127,6 +127,19 @@ document.querySelectorAll('.bar button').forEach(b=>b.onclick=()=>{mode=b.datase
 document.querySelector('.bar input').oninput=e=>{q=e.target.value.toLowerCase();apply()};
 </script></body></html>`;
     fs.writeFileSync(path.join(this.out, 'index.html'), html);
+
+    // a Markdown summary, for CI (GitHub Actions appends it to the run page)
+    const failedTests = this.tests.filter((t) => t.status !== t.expected && t.status !== 'skipped');
+    const md = [`### TRMNL plugin tests: ${failed ? `${failed} failed` : 'all passed'}`, '',
+      `| passed | failed | skipped | device pictures | transform runs |`, `|---|---|---|---|---|`,
+      `| ${by('passed')} | ${failed} | ${by('skipped')} | ${renders} | ${transforms.length}${avg != null ? ` (avg ${avg} ms, peak ${maxMem} MB)` : ''} |`, ''];
+    if (failedTests.length) {
+      md.push('**Failed**', '');
+      for (const t of failedTests.slice(0, 30)) md.push(`- \`${t.file}:${t.line}\` ${t.title}: ${(t.errors[0] || '').split('\n')[0].slice(0, 200)}`);
+      md.push('');
+    }
+    md.push('The report with every device picture is in the run artifacts.');
+    fs.writeFileSync(path.join(this.out, 'summary.md'), md.join('\n') + '\n');
   }
 
   printsToStdio() { return false; }
