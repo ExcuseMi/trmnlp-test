@@ -23,6 +23,7 @@ trmnlp-test init               # trmnlp-test.config.js + test/trmnl/plugin.spec.
 trmnlp-test                    # run; Playwright args pass through (-g, --update-snapshots)
 trmnlp-test models | versions  # device models / framework versions
 trmnlp-test update             # pull the image now (otherwise at most once a day)
+trmnlp-test help | --version   # all commands and options / versions of trmnlp-test, trmnlp, Playwright
 ```
 
 `--repo DIR` runs against another directory. `--mount DIR` mounts an extra directory.

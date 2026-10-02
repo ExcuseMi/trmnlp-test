@@ -8,24 +8,27 @@ const { cacheDir } = require('./paths');
 
 const MANIFEST_URL = 'https://raw.githubusercontent.com/usetrmnl/trmnl-framework/main/db/data/framework_versions.yml';
 
-function load() {
-  const candidates = [path.join(cacheDir(), 'framework_versions.yml'), '/app/db/data/framework_versions.yml',
-    path.join(__dirname, '..', 'data', 'framework_versions.yml')];
-  for (const file of candidates) {
-    try {
-      const doc = YAML.parse(fs.readFileSync(file, 'utf8'));
-      if (doc && doc.latest && doc.versions) return doc;
-    } catch { /* next */ }
-  }
-  return { latest: '3.4.0', versions: [{ number: '3.4.0' }] };
-}
-
-const manifest = load();
-const cmp = (a, b) => {
+function cmp(a, b) {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
   for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i];
   return 0;
-};
+}
+
+// the cached manifest, ours, or trmnlp's: whichever knows the newest release
+function load() {
+  const candidates = [path.join(cacheDir(), 'framework_versions.yml'), path.join(__dirname, '..', 'data', 'framework_versions.yml'),
+    '/app/db/data/framework_versions.yml'];
+  let best = null;
+  for (const file of candidates) {
+    try {
+      const doc = YAML.parse(fs.readFileSync(file, 'utf8'));
+      if (doc && doc.latest && doc.versions && (!best || cmp(String(doc.latest), String(best.latest)) > 0)) best = doc;
+    } catch { /* next */ }
+  }
+  return best || { latest: '3.4.0', versions: [{ number: '3.4.0' }] };
+}
+
+const manifest = load();
 const versions = manifest.versions.map((v) => String(v.number)).sort(cmp);
 
 const FRAMEWORK = {

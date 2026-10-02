@@ -1,17 +1,31 @@
 #!/usr/bin/env node
 'use strict';
-// trmnlp-test run [playwright test args]   run the plugin's tests (default)
-// trmnlp-test init                          scaffold a config and a first spec
-// trmnlp-test models | versions             list device models / framework versions
-// trmnlp-test refresh                       re-download models, palettes and the framework manifest
+// The command inside the image. Usage: lib/trmnlp_test/usage.txt (shared with the gem launcher).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { cacheDir, writeAtomic } = require('./paths');
 
+const ROOT = path.join(__dirname, '..');
+const USAGE = path.join(ROOT, 'lib', 'trmnlp_test', 'usage.txt');
+const ALIASES = { '-h': 'help', '--help': 'help', '-v': 'version', '--version': 'version' };
+
 const argv = process.argv.slice(2);
+if (ALIASES[argv[0]]) argv[0] = ALIASES[argv[0]];
 const cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'run';
+
+function versions() {
+  const read = (file, re) => { try { return fs.readFileSync(file, 'utf8').match(re)[1]; } catch { return null; } };
+  const own = read(path.join(ROOT, 'lib', 'trmnlp_test', 'version.rb'), /VERSION = '([^']+)'/);
+  const trmnlpLib = process.env.TRMNLP_LIB || '';
+  let trmnlp = read(path.join(trmnlpLib, 'trmnlp', 'version.rb'), /VERSION = '([^']+)'/);
+  if (!trmnlp) trmnlp = (spawnSync('trmnlp', ['version'], { encoding: 'utf8' }).stdout || '').trim() || 'not found';
+  const ruby = (spawnSync('ruby', ['-e', 'print RUBY_VERSION'], { encoding: 'utf8' }).stdout || '?');
+  const { FRAMEWORK } = require('./framework');
+  return [`trmnlp-test ${own}`, `trmnlp ${trmnlp}`, `Playwright ${require('@playwright/test/package.json').version}`,
+    `Node ${process.versions.node}, Ruby ${ruby}`, `framework latest ${FRAMEWORK.latest}`].join('\n');
+}
 
 // --root <dir> picks the plugin repository (default: cwd); --report <dir> overrides the report directory
 const rootAt = argv.indexOf('--root');
@@ -70,6 +84,10 @@ function playwrightConfig(cfg) {
 }
 
 async function run() {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    const res = spawnSync(process.execPath, [require.resolve('@playwright/test/cli'), 'test', '--help'], { stdio: 'inherit' });
+    process.exit(res.status ?? 0);
+  }
   await refresh();
   const { loadConfig } = require('./config');
   const cfg = loadConfig();
@@ -129,8 +147,14 @@ async function main() {
       console.log(`latest ${FRAMEWORK.latest}\n${FRAMEWORK.versions.join(' ')}`);
       return;
     }
+    case 'help':
+      process.stdout.write(fs.readFileSync(USAGE, 'utf8'));
+      return;
+    case 'version':
+      console.log(versions());
+      return;
     default:
-      console.error(`unknown command ${cmd}`);
+      process.stderr.write(`trmnlp-test: unknown command "${cmd}"\n\n${fs.readFileSync(USAGE, 'utf8')}`);
       process.exit(2);
   }
 }

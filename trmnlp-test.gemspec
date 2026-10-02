@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
   spec.homepage = 'https://github.com/ExcuseMi/trmnlp-test'
   spec.license = 'MIT'
   spec.required_ruby_version = '>= 3.0'
-  spec.files = Dir['exe/*', 'lib/**/*.rb', 'README.md', 'LICENSE']
+  spec.files = Dir['exe/*', 'lib/**/*.{rb,txt}', 'README.md', 'LICENSE']
   spec.bindir = 'exe'
   spec.executables = ['trmnlp-test']
   spec.metadata = { 'source_code_uri' => spec.homepage, 'rubygems_mfa_required' => 'true' }

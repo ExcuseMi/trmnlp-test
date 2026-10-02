@@ -19,9 +19,19 @@ while %w[--repo --mount].include?(args.first)
   flag == '--repo' ? repo = path : mounts += ['-v', "#{path}:#{path}"]
 end
 
+USAGE = File.read(File.expand_path('../lib/trmnlp_test/usage.txt', __dir__))
+args[0] = { '-h' => 'help', '--help' => 'help', '-v' => 'version', '--version' => 'version' }.fetch(args[0], args[0]) if args.any?
 case args.first
+when 'help'
+  puts USAGE
+  exit
 when 'version'
-  puts "trmnlp-test #{TrmnlpTest::VERSION} (#{image})"
+  puts "launcher #{TrmnlpTest::VERSION}, image #{image}"
+  if system('docker', 'image', 'inspect', image, out: File::NULL, err: File::NULL)
+    exec 'docker', 'run', '--rm', image, 'version'
+  else
+    puts 'image not pulled yet (trmnlp-test update)'
+  end
   exit
 when 'update'
   exec 'docker', 'pull', image
@@ -37,10 +47,10 @@ present = system('docker', 'image', 'inspect', image, out: File::NULL, err: File
 stamp = File.join(cache, '.pulled-' + image.gsub(/[^A-Za-z0-9.]+/, '_'))
 stale = image.end_with?(':latest') && (!File.exist?(stamp) || Time.now - File.mtime(stamp) > 86_400)
 if !present || (stale && !ENV['TRMNLP_TEST_NO_PULL'])
-  warn "trmnlp-test: pulling #{image}"
-  pulled = system('docker', 'pull', '-q', image, out: File::NULL)
+  warn "trmnlp-test: pulling #{image}" unless present
+  pulled = system('docker', 'pull', '-q', image, out: File::NULL, err: present ? File::NULL : $stderr)
   abort("trmnlp-test: could not pull #{image}") if !pulled && !present
-  FileUtils.touch(stamp) if pulled
+  FileUtils.touch(stamp) # checked today, whether or not the registry had it
 end
 entry = []
 if args.first == 'shell'

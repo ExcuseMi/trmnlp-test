@@ -1,0 +1,30 @@
+Usage: trmnlp-test [options] [command] [args]
+
+Tests TRMNL plugins in the trmnlp format, in Docker.
+
+Commands:
+  run [playwright args]   run the tests (default), e.g. -g "dark", --update-snapshots, -j 4
+  init                    create trmnlp-test.config.js and test/trmnl/plugin.spec.js
+  models                  list the TRMNL device models and their palettes
+  versions                list the TRMNL framework versions
+  refresh                 re-download models, palettes and framework versions
+  update                  pull the newest image now (otherwise at most once a day)
+  shell                   open a shell in the image
+  version                 show the versions of trmnlp-test, trmnlp and Playwright
+  help                    show this help (run --help: the Playwright test options)
+
+Options:
+  --repo DIR              the plugin repository (default: the current directory)
+  --mount DIR             also mount DIR into the container (repeatable)
+  --root DIR              the directory with trmnlp-test.config.js, inside the repository
+  --report DIR            where the report goes (default: config "report")
+  -h, --help              show this help
+  -v, --version           show versions
+
+Environment:
+  TRMNLP_TEST_WORKERS     parallel workers, a number or "50%" (default: half the CPUs)
+  TRMNLP_TEST_IMAGE       image to run (default: ghcr.io/excusemi/trmnlp-test:latest)
+  TRMNLP_TEST_CACHE_DIR   cache directory (default: ~/.cache/trmnlp-test)
+  TRMNLP_TEST_NO_PULL=1   never pull the image automatically
+
+Docs: https://github.com/ExcuseMi/trmnlp-test
