@@ -110,12 +110,6 @@ for (const s of matrix({ device: DEVICES.representative, view: VIEWS, darkMode: 
 }
 ```
 
-**Where TRMNL differs from trmnlp.** trmnlp-test renders with trmnlp's code, except where TRMNL is known to differ (observed on trmnl.com, 2026-10-02):
-
-- `qr_code`: the server ignores the view argument and returns the viewBox plus the code's natural width/height and `style="max-width:100%;height:auto"`, so a code only shrinks, never grows (a 25-module code stays 275 px in a bigger box), and a second width added by the template makes the SVG invalid XML inside an `<img>`. This is the default; `qr: 'trmnlp'` renders trmnlp's scalable SVG, `qr: 'fixed'` one without a viewBox (not observed, for robustness). `matrix({ qr: QR_MODES })` covers all three.
-- Dark mode: `darkMode: true` inverts the whole screen except images, as TRMNL describes it and the server preview showed for an inline SVG on framework 3.4. Not yet confirmed on a device for v3. `darkMode: 'framework'` renders the v3 class only, which leaves inline SVG and hard-coded colours as they are.
-- `crlf: true` (not the server: TRMNL's web editor preview) turns the template's newlines into CR LF, so a newline typed in the template no longer matches `\n` in data.
-
 Other helpers: `trmnl.plugin('other/dir')`, `trmnl.lint()` with `toPassLint({ allow })`, `FRAMEWORK.majors()`, `FRAMEWORK.latestOf('2')`.
 
 ## How it works
