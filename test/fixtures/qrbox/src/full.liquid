@@ -1,0 +1,5 @@
+<div class="layout">
+  {%- comment -%} a 21-module code at 11 px a module (231 px) in a 600 x 400 box {%- endcomment -%}
+  <div data-box style="width: 600px; height: 400px">{{ "hello" | qr_code: 11, "m", "responsive" }}</div>
+  <div data-fixed>{{ "hello" | qr_code: 4, "m", "fixed" }}</div>
+</div>

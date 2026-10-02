@@ -32,7 +32,7 @@ test.describe('qr_code and line endings as TRMNL makes them', () => {
     expect(screen.markup).toMatch(/<svg[^>]*\swidth=/);
     expect(screen.markup).not.toMatch(/<svg[^>]*viewBox/);
   });
-  test("crlf: the web editor's CR LF, a newline typed in the template no longer splits the data", async ({ trmnl }) => {
+  test("crlf: with CR LF newlines, a newline typed in the template no longer splits the data", async ({ trmnl }) => {
     const screen = await trmnl.plugin('../fixtures/quirks').render({ crlf: true });
     await expect(screen.locator('[data-count]')).toHaveText('1');
   });

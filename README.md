@@ -73,7 +73,7 @@ test('menu', async ({ trmnl }) => {
     device: 'og_plus', view: 'full',          // any model, orientation: 'portrait', palette, theme, scale, textScale, fonts, framework
     darkMode: true,                           // as the server does it: everything inverted except images ('framework': the v3 class only)
     qr: 'server',                             // qr_code as TRMNL's server returns it (default); 'trmnlp', 'fixed'
-    crlf: true,                               // the template with CR LF newlines, as TRMNL's web editor preview had it
+    crlf: true,                               // the template with CR LF newlines (e.g. pasted markup)
     fields: { data_source: 'webhook' },       // custom field values (defaults + .trmnlp.yml + these)
     webhook: { merge_variables: {...} },      // or data: {...} to render given data as is
     mocks: { 'https://api.example.com/*': { temp: 21 } },
@@ -119,4 +119,5 @@ See [docs/README.md](docs/README.md) for diagrams of the components, a render, s
 ## Examples and self-tests
 
 - `examples/payment-qr`: the earlier webhook + serverless version of the payment QR plugin (the current version tests itself with trmnlp-test in its own repository).
+- `test/self/trmnlp-vs-trmnl.spec.js`: where trmnlp renders differently from TRMNL, as tests that fail on trmnlp's behaviour (marked `test.fail`, so they turn red once trmnlp matches). `TRMNLP_TEST_SHOW_DIFFERENCES=1` prints the failures.
 - `test/self`: fixture plugins for every strategy and language (86 tests). Run with `bin/trmnlp-test run --root test/self`.

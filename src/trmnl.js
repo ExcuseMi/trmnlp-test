@@ -75,7 +75,7 @@ class Trmnl {
 
   async run(opts, views) {
     const o = this.options(opts);
-    if ('server' in o) throw new Error("the server option is gone: the server's qr_code is the default (qr: 'trmnlp' for trmnlp's), and crlf: true renders the web editor's CR LF");
+    if ('server' in o) throw new Error("the server option is gone: the server's qr_code is the default (qr: 'trmnlp' for trmnlp's), and crlf: true renders CR LF newlines");
     const info = await this.info();
     const device = await this.device(o, info);
     const darkMode = darkModeOf(o.darkMode ?? info.settings.dark_mode === 'yes', this.config.darkMode);

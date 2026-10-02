@@ -387,7 +387,7 @@ module TrmnlpTest
 
       shared = plugin.paths.shared_template
       source = (shared.exist? ? shared.read : '') + path.read
-      # TRMNL's web editor preview made the template's newlines CR LF
+      # crlf: true renders the template with CR LF newlines (e.g. markup pasted from Windows)
       source = source.gsub(/\r?\n/, "\r\n") if markup['crlf']
       Thread.current[:trmnlp_test_now] = now
       template = Liquid::Template.parse(source, environment: plugin.liquid_environment(markup['qr']))
