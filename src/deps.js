@@ -33,11 +33,31 @@ function installOne(lang, spec, root, log) {
   const pkgs = file ? [] : [...BUILTIN[lang], ...(spec || [])];
   if (!file && pkgs.length === 0) return null;
   const key = crypto.createHash('sha1').update(lang + JSON.stringify(pkgs) + (file ? fs.readFileSync(file, 'utf8') : '')).digest('hex').slice(0, 12);
-  const dir = path.join(cacheDir(), 'deps', `${lang}-${key}`);
-  if (fs.existsSync(path.join(dir, '.ok'))) return dir;
-  fs.rmSync(dir, { recursive: true, force: true });
+  const final = path.join(cacheDir(), 'deps', `${lang}-${key}`);
+  if (fs.existsSync(path.join(final, '.ok'))) return final;
+  // install into a private directory, then rename it into place: parallel runs never see
+  // (or delete) a half-installed directory, and the first one to finish wins
+  const dir = `${final}.tmp-${process.pid}-${Date.now()}`;
   fs.mkdirSync(dir, { recursive: true });
   log(`installing ${lang} transform dependencies: ${file ? path.basename(file) : pkgs.join(' ')}`);
+  try {
+    installInto(lang, dir, file, pkgs);
+  } catch (e) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw e;
+  }
+  fs.writeFileSync(path.join(dir, '.ok'), new Date().toISOString());
+  try {
+    fs.renameSync(dir, final);
+  } catch (e) {
+    // another run installed the same list first
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (!fs.existsSync(path.join(final, '.ok'))) throw e;
+  }
+  return final;
+}
+
+function installInto(lang, dir, file, pkgs) {
   switch (lang) {
     case 'python':
       sh('pip3', ['install', '--quiet', '--disable-pip-version-check', '--root-user-action=ignore', '--target', dir,
@@ -62,8 +82,6 @@ function installOne(lang, spec, root, log) {
     default:
       throw new Error(`unknown serverless language ${lang}`);
   }
-  fs.writeFileSync(path.join(dir, '.ok'), new Date().toISOString());
-  return dir;
 }
 
 function installDependencies(dependencies = {}, { root = process.cwd(), log = console.log } = {}) {

@@ -48,6 +48,6 @@ if args.first == 'shell'
   entry = ['--entrypoint', 'bash']
 end
 tty = $stdout.tty? ? ['-t'] : []
-env = %w[CI TRMNLP_TEST_DEBUG FORCE_COLOR].flat_map { |k| ['-e', k] }
+env = %w[CI TRMNLP_TEST_DEBUG TRMNLP_TEST_WORKERS FORCE_COLOR].flat_map { |k| ['-e', k] }
 exec 'docker', 'run', '--rm', '-i', *tty, '--init', '--ipc=host', '-u', "#{Process.uid}:#{Process.gid}",
      '-v', "#{repo}:#{repo}", '-w', repo, '-v', "#{cache}:/cache", *mounts, *env, *entry, image, *args

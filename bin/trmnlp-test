@@ -25,4 +25,4 @@ TTY=(); [[ -t 1 ]] && TTY=(-t)
 ENTRY=(); if [[ "${1:-}" == shell ]]; then shift; ENTRY=(--entrypoint bash); fi
 exec docker run --rm -i "${TTY[@]}" --init --ipc=host -u "$(id -u):$(id -g)" \
   -v "$REPO:$REPO" -w "$REPO" -v "$CACHE:/cache" "${MOUNTS[@]}" \
-  -e CI -e TRMNLP_TEST_DEBUG -e FORCE_COLOR "${ENTRY[@]}" "$IMAGE" "$@"
+  -e CI -e TRMNLP_TEST_DEBUG -e TRMNLP_TEST_WORKERS -e FORCE_COLOR "${ENTRY[@]}" "$IMAGE" "$@"

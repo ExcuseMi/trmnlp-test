@@ -9,4 +9,11 @@ function cacheDir() {
   return dir;
 }
 
-module.exports = { cacheDir };
+// write to a private temp file, then rename: concurrent readers see the old or the new file, never half
+function writeAtomic(file, body) {
+  const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  fs.writeFileSync(tmp, body);
+  fs.renameSync(tmp, file);
+}
+
+module.exports = { cacheDir, writeAtomic };

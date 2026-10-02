@@ -18,16 +18,20 @@ module TrmnlpTest
       @pem_path = File.join(dir, 'ca.pem')
       key_path = File.join(dir, 'ca.key')
       @bundle_path = File.join(dir, 'bundle.pem')
-      unless File.exist?(@pem_path) && File.exist?(key_path)
-        key = OpenSSL::PKey::RSA.new(2048)
-        cert = build_cert(key, key, '/CN=trmnlp-test mock CA', ca: true)
-        File.write(key_path, key.to_pem)
-        File.write(@pem_path, cert.to_pem)
+      # one CA for every worker: the first creates it under a lock, the rest wait and read it
+      File.open(File.join(dir, 'ca.lock'), File::RDWR | File::CREAT, 0o644) do |lock|
+        lock.flock(File::LOCK_EX)
+        unless File.exist?(@pem_path) && File.exist?(key_path)
+          key = OpenSSL::PKey::RSA.new(2048)
+          cert = build_cert(key, key, '/CN=trmnlp-test mock CA', ca: true)
+          atomic_write(key_path, key.to_pem)
+          atomic_write(@pem_path, cert.to_pem)
+        end
+        @key = OpenSSL::PKey::RSA.new(File.read(key_path))
+        @cert = OpenSSL::X509::Certificate.new(File.read(@pem_path))
+        system_bundle = ['/etc/ssl/certs/ca-certificates.crt'].find { |f| File.exist?(f) }
+        atomic_write(@bundle_path, (system_bundle ? File.read(system_bundle) : '') + "\n" + File.read(@pem_path))
       end
-      @key = OpenSSL::PKey::RSA.new(File.read(key_path))
-      @cert = OpenSSL::X509::Certificate.new(File.read(@pem_path))
-      system_bundle = ['/etc/ssl/certs/ca-certificates.crt'].find { |f| File.exist?(f) }
-      File.write(@bundle_path, (system_bundle ? File.read(system_bundle) : '') + "\n" + File.read(@pem_path))
       @leaf_key = OpenSSL::PKey::RSA.new(2048)
       @contexts = {}
       @lock = Mutex.new
@@ -45,6 +49,12 @@ module TrmnlpTest
     end
 
     private
+
+    def atomic_write(path, body)
+      tmp = "#{path}.#{Process.pid}.tmp"
+      File.write(tmp, body)
+      File.rename(tmp, path)
+    end
 
     def build_cert(key, signing_key, subject, ca: false, host: nil, issuer: nil)
       cert = OpenSSL::X509::Certificate.new

@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { cacheDir } = require('./paths');
+const { cacheDir, writeAtomic } = require('./paths');
 
 const PAGE_ORIGIN = 'https://trmnl.test';
 const PAGE_URL = PAGE_ORIGIN + '/render';
@@ -45,10 +45,9 @@ async function cachedFetch(url, { offline }) {
       const body = Buffer.from(await res.arrayBuffer());
       const info = { status: res.status, contentType: res.headers.get('content-type') || 'application/octet-stream' };
       if (res.ok) {
-        const tmp = file + '.' + process.pid;
-        fs.writeFileSync(tmp, body);
-        fs.renameSync(tmp, file);
-        fs.writeFileSync(meta, JSON.stringify(info));
+        // body first, metadata last: the metadata file is what marks an entry complete
+        writeAtomic(file, body);
+        writeAtomic(meta, JSON.stringify(info));
       }
       return { ...info, body };
     })().finally(() => setTimeout(() => inflight.delete(url), 0)));

@@ -25,7 +25,9 @@ trmnlp-test models | versions  # device models / framework versions
 trmnlp-test update             # pull the image now (otherwise at most once a day)
 ```
 
-`--repo DIR` runs against another directory. `--mount DIR` mounts an extra directory. The cache (assets, dependencies, mock CA) is kept in `~/.cache/trmnlp-test`.
+`--repo DIR` runs against another directory. `--mount DIR` mounts an extra directory.
+
+**Parallel:** tests run in parallel workers, each with its own harness and browser (default: half the CPUs). Set the number with `workers: 4` (or `'50%'`) in the config, `TRMNLP_TEST_WORKERS=4`, or `--workers 4` / `-j 4`, in increasing priority. Separate runs can also go at the same time, for other plugins or the same one: the shared cache is safe for concurrent use. Give each run of the same repo its own `--report DIR`. The cache (assets, dependencies, mock CA) is kept in `~/.cache/trmnlp-test`.
 
 From a clone, `bin/trmnlp-test` builds the image from source on the newest trmnlp (`TRMNLP_TEST_BUILD=1` rebuilds it; `TRMNLP_VERSION=x.y.z` picks another).
 

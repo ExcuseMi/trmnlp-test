@@ -8,14 +8,17 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { cacheDir } = require('./paths');
+const { cacheDir, writeAtomic } = require('./paths');
 
 const argv = process.argv.slice(2);
 const cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'run';
 
-// --root <dir> picks the plugin repository (default: cwd)
+// --root <dir> picks the plugin repository (default: cwd); --report <dir> overrides the report directory
 const rootAt = argv.indexOf('--root');
 if (rootAt >= 0) { process.env.TRMNLP_TEST_ROOT = path.resolve(argv[rootAt + 1]); argv.splice(rootAt, 2); }
+const reportAt = argv.indexOf('--report');
+let reportOverride = null;
+if (reportAt >= 0) { reportOverride = path.resolve(argv[reportAt + 1]); argv.splice(reportAt, 2); }
 
 async function refresh({ force = false } = {}) {
   const files = {
@@ -33,11 +36,16 @@ async function refresh({ force = false } = {}) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (name.endsWith('.json')) JSON.parse(body).data.length;
       else if (!/latest:/.test(body)) throw new Error('not a version manifest');
-      fs.writeFileSync(file, body);
+      writeAtomic(file, body);
     } catch (e) {
       console.error(`trmnlp-test: could not refresh ${name} (${e.message}); using the cached or bundled copy`);
     }
   }
+}
+
+// a number, or a share of the CPUs such as '50%'
+function workersValue(w) {
+  return /^\d+$/.test(String(w)) ? Number(w) : String(w);
 }
 
 function playwrightConfig(cfg) {
@@ -51,7 +59,8 @@ function playwrightConfig(cfg) {
     fullyParallel: true,
     timeout: cfg.timeout || 60000,
     retries: cfg.retries || 0,
-    ...(cfg.workers && { workers: cfg.workers }),
+    // TRMNLP_TEST_WORKERS > config workers > Playwright's default (half the CPUs); --workers/-j wins over all
+    ...((process.env.TRMNLP_TEST_WORKERS || cfg.workers) && { workers: workersValue(process.env.TRMNLP_TEST_WORKERS || cfg.workers) }),
     reporter: [['list'], ['html', { outputFolder: path.join(report, 'html'), open: 'never' }],
       [path.join(__dirname, 'gallery-reporter.js'), { outputFolder: report }]],
     use: { headless: true, launchOptions: { args: ['--font-render-hinting=none', '--disable-lcd-text'] } },
@@ -64,6 +73,7 @@ async function run() {
   await refresh();
   const { loadConfig } = require('./config');
   const cfg = loadConfig();
+  if (reportOverride) cfg.report = reportOverride;
   if (!fs.existsSync(path.resolve(cfg.root, cfg.plugin))) {
     console.error(`trmnlp-test: plugin directory ${cfg.plugin} not found under ${cfg.root} (set "plugin" in trmnlp-test.config.js)`);
     process.exit(2);

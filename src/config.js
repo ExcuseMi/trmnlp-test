@@ -12,7 +12,8 @@
 //     timeoutMs: 5000,
 //   },
 //   screenshots: 'always',            // attach device pictures: 'always' | 'on-failure' | 'never'
-//   workers: undefined, retries: 0,
+//   workers: 4,                     // or '50%'; TRMNLP_TEST_WORKERS and --workers override it
+//   retries: 0,
 // };
 const fs = require('fs');
 const path = require('path');
