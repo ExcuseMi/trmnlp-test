@@ -1,9 +1,13 @@
 name: release
-# main -> image :latest. Tag vX.Y.Z -> self-tests, image :X.Y.Z, gem (if RUBYGEMS_API_KEY is set).
+# Always built on the newest trmnlp release, self-tested before anything is pushed.
+# main and the daily schedule -> image :latest + :trmnlp-<version> (schedule: only when trmnlp moved).
+# Tag vX.Y.Z -> image :X.Y.Z and the gem (if RUBYGEMS_API_KEY is set).
 on:
   push:
     branches: [main]
     tags: ['v*']
+  schedule:
+    - cron: '17 5 * * *'
   workflow_dispatch:
 
 permissions:
@@ -15,36 +19,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: newest trmnlp
+        id: trmnlp
+        run: |
+          v=$(curl -fsS https://rubygems.org/api/v1/versions/trmnl_preview/latest.json | jq -r .version)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "trmnlp $v"
+          if [ "${{ github.event_name }}" = schedule ] && docker manifest inspect ghcr.io/excusemi/trmnlp-test:trmnlp-$v >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: docker/setup-buildx-action@v3
+        if: steps.trmnlp.outputs.skip != 'true'
       - uses: docker/login-action@v3
+        if: steps.trmnlp.outputs.skip != 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
+        if: steps.trmnlp.outputs.skip != 'true'
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/excusemi/trmnlp-test
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=trmnlp-${{ steps.trmnlp.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=sha
       - name: build
+        if: steps.trmnlp.outputs.skip != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: TRMNLP_VERSION=${{ steps.trmnlp.outputs.version }}
           load: true
           tags: trmnlp-test:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: self-tests
+        if: steps.trmnlp.outputs.skip != 'true'
         run: |
           mkdir -p "$HOME/.cache/trmnlp-test"
           TRMNLP_TEST_IMAGE=trmnlp-test:ci ruby exe/trmnlp-test run --root test/self
       - name: push
+        if: steps.trmnlp.outputs.skip != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: TRMNLP_VERSION=${{ steps.trmnlp.outputs.version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

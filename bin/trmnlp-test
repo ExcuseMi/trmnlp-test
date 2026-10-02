@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs trmnlp-test in Docker against a plugin repository (default: the current directory).
 #   trmnlp-test [--repo DIR] [--mount DIR]... [run|init|models|versions|refresh|shell] [playwright args]
-# TRMNLP_TEST_BUILD=1 rebuilds the image; TRMNLP_VERSION=x.y.z builds against another trmnlp.
+# TRMNLP_TEST_BUILD=1 rebuilds the image on the newest trmnlp; TRMNLP_VERSION=x.y.z picks another.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 IMAGE="${TRMNLP_TEST_IMAGE:-trmnlp-test:latest}"
@@ -15,7 +15,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 if [[ "${TRMNLP_TEST_BUILD:-}" == 1 ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  docker build --build-arg "TRMNLP_VERSION=${TRMNLP_VERSION:-0.13.1}" -t "$IMAGE" "$HERE" >&2
+  # the newest trmnlp release unless TRMNLP_VERSION picks one
+  V="${TRMNLP_VERSION:-$(curl -fsS https://rubygems.org/api/v1/versions/trmnl_preview/latest.json 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')}"
+  docker build --build-arg "TRMNLP_VERSION=${V:-0.13.1}" -t "$IMAGE" "$HERE" >&2
 fi
 CACHE="${TRMNLP_TEST_CACHE_DIR:-$HOME/.cache/trmnlp-test}"
 mkdir -p "$CACHE"

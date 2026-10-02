@@ -11,12 +11,12 @@ package "plugin repo (host)" {
   [plugin/src + .trmnlp.yml] as plugin
   [test/trmnl-report/] as report
 }
-package "Docker image trmnlp-test\nFROM trmnl/trmnlp:v0.13.1" {
+package "Docker image trmnlp-test\nFROM trmnl/trmnlp (newest release)" {
   [bin/trmnlp-test\n-> src/cli.js] as cli
   [Playwright runner] as pw
   [src/index.js\nfixtures + matchers] as api
   [ruby/harness.rb] as harness
-  [trmnlp 0.13.1 library] as trmnlp
+  [trmnlp library] as trmnlp
   [python / ruby / node / php\n+ libfaketime] as runtimes
   [mock proxy (MITM)] as proxy
   [Chromium] as chrome

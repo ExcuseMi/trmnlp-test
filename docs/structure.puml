@@ -3,7 +3,7 @@
 {T
 + trmnlp-test
 ++ bin/trmnlp-test | host wrapper: builds the image, docker run
-++ Dockerfile | trmnlp 0.13.1 + Node 24 + Chromium + runtimes
+++ Dockerfile | newest trmnlp + Node 24 + Chromium + runtimes
 ++ src
 +++ cli.js | run, init, models, versions, refresh
 +++ config.js | trmnlp-test.config.js defaults

@@ -7,7 +7,8 @@ require 'etc'
 require 'fileutils'
 require_relative '../lib/trmnlp_test/version'
 
-image = ENV.fetch('TRMNLP_TEST_IMAGE', "#{TrmnlpTest::IMAGE}:#{TrmnlpTest::VERSION}")
+# :latest follows the newest trmnlp release; TRMNLP_TEST_IMAGE pins one (e.g. ...:trmnlp-0.13.1)
+image = ENV.fetch('TRMNLP_TEST_IMAGE', "#{TrmnlpTest::IMAGE}:latest")
 repo = Dir.pwd
 mounts = []
 args = ARGV.dup
@@ -27,13 +28,20 @@ when 'update'
 end
 
 abort 'trmnlp-test needs Docker: https://docs.docker.com/get-docker/' unless system('docker info', out: File::NULL, err: File::NULL)
-unless system('docker', 'image', 'inspect', image, out: File::NULL, err: File::NULL)
-  warn "trmnlp-test: pulling #{image} (once)"
-  system('docker', 'pull', image) || abort("trmnlp-test: could not pull #{image}")
-end
 
 cache = ENV.fetch('TRMNLP_TEST_CACHE_DIR', File.join(Dir.home, '.cache', 'trmnlp-test'))
 FileUtils.mkdir_p(cache)
+
+# a missing image is pulled; a :latest image is refreshed at most once a day
+present = system('docker', 'image', 'inspect', image, out: File::NULL, err: File::NULL)
+stamp = File.join(cache, '.pulled-' + image.gsub(/[^A-Za-z0-9.]+/, '_'))
+stale = image.end_with?(':latest') && (!File.exist?(stamp) || Time.now - File.mtime(stamp) > 86_400)
+if !present || (stale && !ENV['TRMNLP_TEST_NO_PULL'])
+  warn "trmnlp-test: pulling #{image}"
+  pulled = system('docker', 'pull', '-q', image, out: File::NULL)
+  abort("trmnlp-test: could not pull #{image}") if !pulled && !present
+  FileUtils.touch(stamp) if pulled
+end
 entry = []
 if args.first == 'shell'
   args.shift
