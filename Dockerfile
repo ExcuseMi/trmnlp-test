@@ -3,6 +3,9 @@
 ARG TRMNLP_VERSION=0.13.1
 FROM node:24-trixie-slim AS node
 FROM trmnl/trmnlp:v${TRMNLP_VERSION}
+LABEL org.opencontainers.image.source=https://github.com/ExcuseMi/trmnlp-test \
+      org.opencontainers.image.description="Test framework for TRMNL plugins" \
+      org.opencontainers.image.licenses=MIT
 
 # Node 24: Playwright, and NODE_USE_ENV_PROXY so serverless fetch() goes through the mock proxy
 COPY --from=node /usr/local/bin/node /usr/local/bin/node

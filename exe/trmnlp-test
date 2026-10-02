@@ -1,0 +1,45 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs trmnlp-test (a Docker image) against a TRMNL plugin repository.
+#   trmnlp-test [--repo DIR] [--mount DIR]... [run|init|models|versions|refresh|update|shell|version] [playwright args]
+require 'etc'
+require 'fileutils'
+require_relative '../lib/trmnlp_test/version'
+
+image = ENV.fetch('TRMNLP_TEST_IMAGE', "#{TrmnlpTest::IMAGE}:#{TrmnlpTest::VERSION}")
+repo = Dir.pwd
+mounts = []
+args = ARGV.dup
+while %w[--repo --mount].include?(args.first)
+  flag, dir = args.shift(2)
+  abort "trmnlp-test: #{flag} needs a directory" unless dir
+  path = File.realpath(dir)
+  flag == '--repo' ? repo = path : mounts += ['-v', "#{path}:#{path}"]
+end
+
+case args.first
+when 'version'
+  puts "trmnlp-test #{TrmnlpTest::VERSION} (#{image})"
+  exit
+when 'update'
+  exec 'docker', 'pull', image
+end
+
+abort 'trmnlp-test needs Docker: https://docs.docker.com/get-docker/' unless system('docker info', out: File::NULL, err: File::NULL)
+unless system('docker', 'image', 'inspect', image, out: File::NULL, err: File::NULL)
+  warn "trmnlp-test: pulling #{image} (once)"
+  system('docker', 'pull', image) || abort("trmnlp-test: could not pull #{image}")
+end
+
+cache = ENV.fetch('TRMNLP_TEST_CACHE_DIR', File.join(Dir.home, '.cache', 'trmnlp-test'))
+FileUtils.mkdir_p(cache)
+entry = []
+if args.first == 'shell'
+  args.shift
+  entry = ['--entrypoint', 'bash']
+end
+tty = $stdout.tty? ? ['-t'] : []
+env = %w[CI TRMNLP_TEST_DEBUG FORCE_COLOR].flat_map { |k| ['-e', k] }
+exec 'docker', 'run', '--rm', '-i', *tty, '--init', '--ipc=host', '-u', "#{Process.uid}:#{Process.gid}",
+     '-v', "#{repo}:#{repo}", '-w', repo, '-v', "#{cache}:/cache", *mounts, *env, *entry, image, *args

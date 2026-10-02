@@ -1,0 +1,68 @@
+name: release
+# main -> image :latest. Tag vX.Y.Z -> self-tests, image :X.Y.Z, gem (if RUBYGEMS_API_KEY is set).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/excusemi/trmnlp-test
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=sha
+      - name: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: trmnlp-test:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: self-tests
+        run: |
+          mkdir -p "$HOME/.cache/trmnlp-test"
+          TRMNLP_TEST_IMAGE=trmnlp-test:ci ruby exe/trmnlp-test run --root test/self
+      - name: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+  gem:
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: build and push
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+        run: |
+          gem build trmnlp-test.gemspec
+          if [ -z "$GEM_HOST_API_KEY" ]; then echo "RUBYGEMS_API_KEY not set: gem built, not pushed"; exit 0; fi
+          gem push trmnlp-test-*.gem

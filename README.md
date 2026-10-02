@@ -9,15 +9,29 @@ Test framework for TRMNL plugins in the trmnlp format (`src/*.liquid`, `settings
 - **Assertions on HTML or PNG:** Playwright locators on the rendered page, plus a picture reduced to the device palette for pixel checks, QR decoding, snapshots and the device image size limit.
 - **Report:** a gallery `index.html` with every device picture, transform time and memory, and problems found, linked to the Playwright HTML report.
 
+## Install
+
+```sh
+gem install trmnlp-test        # needs Ruby and Docker; the first run pulls ghcr.io/excusemi/trmnlp-test
+```
+
 ## Use
 
 ```sh
-bin/trmnlp-test --repo ~/workspace/my-plugin init   # config + first spec
-bin/trmnlp-test --repo ~/workspace/my-plugin        # run; Playwright args pass through (-g, --update-snapshots)
-bin/trmnlp-test models | versions                   # device models / framework versions
+cd my-plugin
+trmnlp-test init               # trmnlp-test.config.js + test/trmnl/plugin.spec.js
+trmnlp-test                    # run; Playwright args pass through (-g, --update-snapshots)
+trmnlp-test models | versions  # device models / framework versions
+trmnlp-test update             # pull the image again
 ```
 
-The first run builds the image `trmnlp-test:latest`. Set `TRMNLP_TEST_BUILD=1` to rebuild it. The cache (assets, dependencies, mock CA) is kept in `~/.cache/trmnlp-test`.
+`--repo DIR` runs against another directory. `--mount DIR` mounts an extra directory. The cache (assets, dependencies, mock CA) is kept in `~/.cache/trmnlp-test`.
+
+From a clone, `bin/trmnlp-test` builds the image from source (`TRMNLP_TEST_BUILD=1` rebuilds it; `TRMNLP_VERSION=x.y.z` picks the trmnlp base image).
+
+## Release
+
+Pushing to `main` publishes the image as `:latest`. Pushing a tag `vX.Y.Z` (matching `lib/trmnlp_test/version.rb`) runs the self-tests, publishes `:X.Y.Z` and pushes the gem when the `RUBYGEMS_API_KEY` secret is set.
 
 ## Config: `trmnlp-test.config.js`
 
