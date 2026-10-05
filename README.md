@@ -1,5 +1,7 @@
 # trmnlp-test
 
+> **Archived.** Plugin testing is now part of trmnlp itself: `trmnlp test` runs a plugin's RSpec files with fake APIs, a fixed clock, any TRMNL device and PNG snapshots. See [Testing Plugins](https://github.com/usetrmnl/trmnlp#testing-plugins) in trmnlp's README. This repo, its gem and its Docker image stay available as they are, and get no further updates.
+
 Test framework for TRMNL plugins in the trmnlp format (`src/*.liquid`, `settings.yml`, `.trmnlp.yml`), in Docker.
 
 - **Every data path:** webhook (`deep_merge`, `stream`, 2 kB / 5 kB limits), webhook + serverless (the transform runs when data arrives and its output is stored), polling (URLs, headers and body rendered with custom fields; JSON/XML), static, serverless transforms in Python, Ruby, Node and PHP, and `trmnl_state` carried between runs.
